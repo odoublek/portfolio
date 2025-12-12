@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap');
+
+
+.signature-text {
+  font-family: 'Great Vibes', cursive;
+  font-size: 48px; /* ihtiyaca göre ayarla */
+  fill: none;
+  stroke: #14b8a6; /* teal-400 */
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  /* stroke-dasharray / offset inline olarak ayarlanacak dinamik uzunluk ile */
+}
+
+.signature-svg {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.signature-text {
+  font-family: 'Great Vibes', cursive;
+  font-size: 58px; /* gerektiğinde ayarla */
+  fill: none;               /* dolguyu gizle */
+  stroke: #14b8a6;          /* stroke rengi (teal-400) */
+  stroke-width: 1.2;        /* çizgi kalınlığı */
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  paint-order: stroke;      /* stroke ön planda */
+  vector-effect: non-scaling-stroke;
+  transition: fill 300ms ease;
+}
