@@ -1,18 +1,12 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Sparkles } from "lucide-react";
 import {
-    Github,
-    Linkedin,
     Mail,
     Phone,
-    MapPin,
     Code,
     TrendingUp,
     Coffee,
     Database,
-    ExternalLink,
-    ChevronDown
 } from 'lucide-react';
 
 
