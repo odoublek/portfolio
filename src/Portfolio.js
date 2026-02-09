@@ -488,7 +488,7 @@ const projects = [
 {
   title: "World Bank Nüfus Dashboard (1960–2024)",
   tags: ["Python", "Streamlit", "Pandas", "Matplotlib", "Plotly", "Veri Analizi"],
-  thumbnail: "/images/population_dashboard_thumb.png",
+  thumbnail: "/images/verianalizi1.png",
   description: "World Bank toplam nüfus verisiyle ülke analizi, karşılaştırma, keşfet ve harita dashboard’u.",
   fullDescription:
     "World Bank’in 1960–2024 toplam nüfus verisini kullanarak interaktif bir dashboard geliştirdim. Uygulama; ülke bazlı trend analizi, yıllık büyüme oranları ve anomali paneli, çoklu ülke karşılaştırma, filtrelenebilir keşfet sayfası (CSV indirme) ve dünya haritası (nüfus / yüzde değişim / mutlak değişim) özelliklerini içerir. Projeyi eğlence ve analiz yeteneklerimi geliştirmek amacıyla geliştirdim.",
