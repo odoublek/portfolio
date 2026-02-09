@@ -467,7 +467,7 @@ const projects = [
         description: "İngiltere kömür tüketimi ve sıcaklık değişimleri arasındaki ilişki analizi.",
         fullDescription:
             "Bu projede, İngiltere’de yıllara göre kömür tüketiminin nasıl değiştiğini ve sıcaklık dalgalanmalarıyla ilişkisinin olup olmadığını inceledim. Veriler temizlendi, yıllık ortalamalar çıkarıldı ve regresyon modeliyle tahminler üretildi. Ortaya çıkan grafikler, hem sıcaklığın hem de tüketimin uzun yıllardaki eğilimlerini açık biçimde ortaya koyuyor.",
-        github: "https://github.com/yourrepo",
+        github: "https://github.com/odoublek/SystemAnalysisProject",
         images: [
             "/images/prediction_plot.png",
             "/images/coal_usage_trend.png",
@@ -489,6 +489,22 @@ const projects = [
   ]
 }
 ,
+{
+  title: "World Bank Nüfus Dashboard (1960–2024)",
+  tags: ["Python", "Streamlit", "Pandas", "Matplotlib", "Plotly", "Veri Analizi"],
+  thumbnail: "/images/population_dashboard_thumb.png",
+  description: "World Bank toplam nüfus verisiyle ülke analizi, karşılaştırma, keşfet ve harita dashboard’u.",
+  fullDescription:
+    "World Bank’in 1960–2024 toplam nüfus verisini kullanarak interaktif bir dashboard geliştirdim. Uygulama; ülke bazlı trend analizi, yıllık büyüme oranları ve anomali paneli, çoklu ülke karşılaştırma, filtrelenebilir keşfet sayfası (CSV indirme) ve dünya haritası (nüfus / yüzde değişim / mutlak değişim) özelliklerini içerir. Projeyi eğlence ve analiz yeteneklerimi geliştirmek amacıyla geliştirdim.",
+  github: "https://github.com/odoublek/total-population-dashboard",
+  live: "", // Streamlit Cloud deploy edince buraya URL ekleyeceğiz
+  images: [
+    "/images/verianalizi1.png",
+    "/images/verianalizi2.png",
+    "/images/verianalizi3.png"
+  ]
+},
+
 
 {
     title: "Medikal Klinik Websitesi",
