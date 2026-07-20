@@ -1,35 +1,154 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap');
 
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
-.signature-text {
-  font-family: 'Great Vibes', cursive;
-  font-size: 48px; /* ihtiyaca göre ayarla */
-  fill: none;
-  stroke: #14b8a6; /* teal-400 */
-  stroke-width: 2.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-  /* stroke-dasharray / offset inline olarak ayarlanacak dinamik uzunluk ile */
+:root {
+  --ink: #070710;
+  --violet: #8b5cf6;
+  --indigo: #6366f1;
+  --fuchsia: #d946ef;
+  --spark: #fbbf24;
 }
 
-.signature-svg {
-  display: inline-block;
-  vertical-align: middle;
+* {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-.signature-text {
-  font-family: 'Great Vibes', cursive;
-  font-size: 58px; /* gerektiğinde ayarla */
-  fill: none;               /* dolguyu gizle */
-  stroke: #14b8a6;          /* stroke rengi (teal-400) */
-  stroke-width: 1.2;        /* çizgi kalınlığı */
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  paint-order: stroke;      /* stroke ön planda */
-  vector-effect: non-scaling-stroke;
-  transition: fill 300ms ease;
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--ink);
+  color: #e7e7f0;
+  font-family: 'Inter', system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+/* --- Selection --- */
+::selection {
+  background: var(--violet);
+  color: #0b0b16;
+}
+
+/* --- Custom scrollbar --- */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #0b0b16;
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(var(--indigo), var(--fuchsia));
+  border-radius: 999px;
+  border: 2px solid #0b0b16;
+}
+
+/* --- Gradient text --- */
+.text-gradient {
+  background: linear-gradient(110deg, #a78bfa 0%, #e879f9 45%, var(--spark) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* --- Grain / noise overlay --- */
+.grain::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* --- Fine dot grid --- */
+.dotgrid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+
+/* --- Glass card base --- */
+.glass {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+}
+
+/* --- Spotlight card: reacts to --x / --y set via JS --- */
+.spotlight {
+  position: relative;
+  isolation: isolate;
+}
+.spotlight::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  background: radial-gradient(
+    340px circle at var(--x, 50%) var(--y, 50%),
+    rgba(139, 92, 246, 0.18),
+    transparent 60%
+  );
+}
+.spotlight:hover::before {
+  opacity: 1;
+}
+
+/* --- Animated conic border on hover --- */
+.glow-border {
+  position: relative;
+}
+.glow-border::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(130deg, rgba(139, 92, 246, 0.6), rgba(217, 70, 239, 0.35), rgba(251, 191, 36, 0.5));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+}
+.glow-border:hover::after {
+  opacity: 1;
+}
+
+/* --- Marquee fade edges --- */
+.marquee-mask {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+
+/* --- Steam rising from the cup --- */
+@keyframes steam {
+  0% { transform: translateY(6px) scaleX(1); opacity: 0; }
+  25% { opacity: 0.6; }
+  100% { transform: translateY(-26px) scaleX(1.5); opacity: 0; }
+}
+.steam {
+  animation: steam 2.2s ease-out infinite;
+}
+
+/* --- Reduced motion --- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
