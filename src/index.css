@@ -2,14 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
-
 :root {
-  --ink: #070710;
-  --violet: #8b5cf6;
-  --indigo: #6366f1;
-  --fuchsia: #d946ef;
-  --spark: #fbbf24;
+  --ink: #0b0a08;
+  --bone: #ede6da;
+  --ember: #ff5b1f;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 * {
@@ -17,131 +14,97 @@
   text-rendering: optimizeLegibility;
 }
 
-html {
-  scroll-behavior: smooth;
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
 }
 
 body {
   background-color: var(--ink);
-  color: #e7e7f0;
-  font-family: 'Inter', system-ui, sans-serif;
+  color: var(--bone);
+  font-family: "Inter Tight", system-ui, sans-serif;
   overflow-x: hidden;
 }
 
-/* --- Selection --- */
-::selection {
-  background: var(--violet);
-  color: #0b0b16;
+/* custom cursor replaces the native one on fine pointers only */
+@media (pointer: fine) {
+  html.has-cursor,
+  html.has-cursor * {
+    cursor: none !important;
+  }
 }
 
-/* --- Custom scrollbar --- */
+::selection {
+  background: var(--ember);
+  color: var(--ink);
+}
+
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #0b0b16;
+  background: var(--ink);
 }
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(var(--indigo), var(--fuchsia));
+  background: #2c2822;
   border-radius: 999px;
-  border: 2px solid #0b0b16;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ember);
 }
 
-/* --- Gradient text --- */
-.text-gradient {
-  background: linear-gradient(110deg, #a78bfa 0%, #e879f9 45%, var(--spark) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
-}
-
-/* --- Grain / noise overlay --- */
-.grain::before {
+/* film grain over everything */
+.grain::after {
   content: "";
   position: fixed;
-  inset: 0;
-  z-index: 1;
+  inset: -50%;
+  z-index: 90;
   pointer-events: none;
-  opacity: 0.04;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.07;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: grain 1.2s steps(6) infinite;
+}
+@keyframes grain {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-3%, 2%); }
+  40% { transform: translate(2%, -3%); }
+  60% { transform: translate(-2%, -1%); }
+  80% { transform: translate(3%, 3%); }
 }
 
-/* --- Fine dot grid --- */
-.dotgrid {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
-  background-size: 26px 26px;
+/* hairline helpers */
+.hairline {
+  border-color: rgba(237, 230, 218, 0.12);
 }
 
-/* --- Glass card base --- */
-.glass {
-  background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(12px);
+/* outlined display text */
+.text-outline {
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(237, 230, 218, 0.35);
 }
 
-/* --- Spotlight card: reacts to --x / --y set via JS --- */
-.spotlight {
-  position: relative;
-  isolation: isolate;
+/* underline that draws in on hover */
+.link-draw {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 0% 1px;
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  transition: background-size 0.5s var(--ease-out);
 }
-.spotlight::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  opacity: 0;
-  transition: opacity 0.4s ease;
-  background: radial-gradient(
-    340px circle at var(--x, 50%) var(--y, 50%),
-    rgba(139, 92, 246, 0.18),
-    transparent 60%
-  );
-}
-.spotlight:hover::before {
-  opacity: 1;
+.link-draw:hover {
+  background-size: 100% 1px;
 }
 
-/* --- Animated conic border on hover --- */
-.glow-border {
-  position: relative;
-}
-.glow-border::after {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(130deg, rgba(139, 92, 246, 0.6), rgba(217, 70, 239, 0.35), rgba(251, 191, 36, 0.5));
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  opacity: 0;
-  transition: opacity 0.35s ease;
-  pointer-events: none;
-}
-.glow-border:hover::after {
-  opacity: 1;
-}
-
-/* --- Marquee fade edges --- */
-.marquee-mask {
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
-}
-
-/* --- Steam rising from the cup --- */
-@keyframes steam {
-  0% { transform: translateY(6px) scaleX(1); opacity: 0; }
-  25% { opacity: 0.6; }
-  100% { transform: translateY(-26px) scaleX(1.5); opacity: 0; }
-}
-.steam {
-  animation: steam 2.2s ease-out infinite;
-}
-
-/* --- Reduced motion --- */
+/* reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

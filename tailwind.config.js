@@ -6,56 +6,43 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // warm espresso blacks
         ink: {
-          950: "#070710",
-          900: "#0b0b16",
-          800: "#12121f",
-          700: "#1a1a2b",
+          950: "#0b0a08",
+          900: "#11100d",
+          800: "#1a1814",
+          700: "#24211c",
         },
-        violet: {
-          DEFAULT: "#8b5cf6",
+        // bone / paper
+        bone: {
+          DEFAULT: "#ede6da",
+          muted: "#a39c90",
+          dim: "#6f695f",
         },
-        spark: "#fbbf24",
+        // single signal accent
+        ember: {
+          DEFAULT: "#ff5b1f",
+          soft: "#ff8a5c",
+        },
       },
       fontFamily: {
-        display: ['"Space Grotesk"', "system-ui", "sans-serif"],
-        sans: ['"Inter"', "system-ui", "sans-serif"],
+        serif: ['"Instrument Serif"', "Georgia", "serif"],
+        sans: ['"Inter Tight"', "system-ui", "sans-serif"],
         mono: ['"JetBrains Mono"', "ui-monospace", "monospace"],
       },
       keyframes: {
-        "aurora-1": {
-          "0%, 100%": { transform: "translate(0, 0) scale(1)" },
-          "33%": { transform: "translate(8%, -6%) scale(1.15)" },
-          "66%": { transform: "translate(-6%, 8%) scale(0.9)" },
+        spin: {
+          to: { transform: "rotate(360deg)" },
         },
-        "aurora-2": {
-          "0%, 100%": { transform: "translate(0, 0) scale(1)" },
-          "33%": { transform: "translate(-10%, 6%) scale(1.1)" },
-          "66%": { transform: "translate(6%, -8%) scale(1.2)" },
-        },
-        "aurora-3": {
-          "0%, 100%": { transform: "translate(0, 0) scale(1.05)" },
-          "50%": { transform: "translate(4%, 4%) scale(0.85)" },
-        },
-        marquee: {
-          from: { transform: "translateX(0)" },
-          to: { transform: "translateX(-50%)" },
-        },
-        blink: {
-          "0%, 100%": { opacity: "1" },
-          "50%": { opacity: "0" },
-        },
-        "fade-up": {
-          from: { opacity: "0", transform: "translateY(14px)" },
-          to: { opacity: "1", transform: "translateY(0)" },
+        steam: {
+          "0%": { transform: "translateY(6px) scaleX(1)", opacity: "0" },
+          "25%": { opacity: "0.55" },
+          "100%": { transform: "translateY(-28px) scaleX(1.6)", opacity: "0" },
         },
       },
       animation: {
-        "aurora-1": "aurora-1 22s ease-in-out infinite",
-        "aurora-2": "aurora-2 26s ease-in-out infinite",
-        "aurora-3": "aurora-3 30s ease-in-out infinite",
-        marquee: "marquee 32s linear infinite",
-        blink: "blink 1.1s step-end infinite",
+        "spin-slow": "spin 18s linear infinite",
+        steam: "steam 2.2s ease-out infinite",
       },
     },
   },

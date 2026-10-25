@@ -1,122 +1,195 @@
-import React, { useRef, useEffect, useState, useCallback, useMemo } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
+import Lenis from "lenis";
 import {
-  motion,
   AnimatePresence,
+  MotionConfig,
+  animate,
+  motion,
+  useAnimationFrame,
+  useInView,
+  useMotionValue,
+  useReducedMotion,
   useScroll,
   useSpring,
-  useMotionValue,
+  useTransform,
+  useVelocity,
 } from "framer-motion";
+import { ArrowDown, ArrowUpRight, ChevronLeft, ChevronRight, Github, Plus } from "lucide-react";
 import {
-  Github,
-  Linkedin,
-  Mail,
-  Phone,
-  Code,
-  TrendingUp,
-  Coffee,
-  Database,
-  Cpu,
-  ArrowUpRight,
-  ArrowRight,
-  Menu,
-  X,
-  ChevronLeft,
-  ChevronRight,
-  Sparkles,
-  MapPin,
-  Globe,
-  ExternalLink,
-  Lock,
-} from "lucide-react";
+  DRINKS,
+  TEA,
+  TEMPS,
+  aboutText,
+  archive,
+  contacts,
+  education,
+  experiences,
+  featured,
+  heroWords,
+  languages,
+  manifesto,
+  navLinks,
+  skillGroups,
+  stack,
+  stats,
+} from "./data";
+
+const EASE = [0.22, 1, 0.36, 1];
+const EASE_IN_OUT = [0.76, 0, 0.24, 1];
+const YEAR = new Date().getFullYear();
 
 /* ------------------------------------------------------------------ */
-/*  Cursor spotlight — big soft glow that trails the pointer          */
+/*  Hooks                                                             */
 /* ------------------------------------------------------------------ */
-const CursorGlow = () => {
-  const ref = useRef(null);
+const LenisContext = createContext(null);
+const useLenis = () => useContext(LenisContext);
 
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const useSmoothScroll = (enabled) => {
+  const [lenis, setLenis] = useState(null);
   useEffect(() => {
-    if (window.matchMedia("(pointer: coarse)").matches) return;
-    const el = ref.current;
-    let raf = 0;
-    let x = window.innerWidth / 2;
-    let y = window.innerHeight / 2;
-    let tx = x;
-    let ty = y;
-
-    const onMove = (e) => {
-      tx = e.clientX;
-      ty = e.clientY;
-    };
-    const loop = () => {
-      x += (tx - x) * 0.12;
-      y += (ty - y) * 0.12;
-      if (el) el.style.transform = `translate3d(${x - 250}px, ${y - 250}px, 0)`;
-      raf = requestAnimationFrame(loop);
-    };
-    window.addEventListener("mousemove", onMove);
-    raf = requestAnimationFrame(loop);
+    if (!enabled) return;
+    const instance = new Lenis({ autoRaf: true, anchors: true, lerp: 0.085 });
+    setLenis(instance);
     return () => {
-      window.removeEventListener("mousemove", onMove);
-      cancelAnimationFrame(raf);
+      instance.destroy();
+      setLenis(null);
     };
-  }, []);
+  }, [enabled]);
+  return lenis;
+};
 
-  return (
-    <div
-      ref={ref}
-      aria-hidden
-      className="pointer-events-none fixed left-0 top-0 z-[2] h-[500px] w-[500px] rounded-full opacity-60 mix-blend-screen"
-      style={{
-        background:
-          "radial-gradient(circle, rgba(139,92,246,0.15), rgba(217,70,239,0.06) 40%, transparent 70%)",
-      }}
-    />
+const useMedia = (query) => {
+  const [matches, setMatches] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(query).matches
   );
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const onChange = () => setMatches(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [query]);
+  return matches;
+};
+
+const clockFormat = new Intl.DateTimeFormat("tr-TR", {
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "Europe/Istanbul",
+});
+const useClock = () => {
+  const [time, setTime] = useState(() => clockFormat.format(new Date()));
+  useEffect(() => {
+    const id = setInterval(() => setTime(clockFormat.format(new Date())), 10000);
+    return () => clearInterval(id);
+  }, []);
+  return time;
+};
+
+// stops page scroll while an overlay is open
+const useScrollLock = (locked) => {
+  const lenis = useLenis();
+  useEffect(() => {
+    if (!locked) return;
+    if (lenis) lenis.stop();
+    else document.documentElement.style.overflow = "hidden";
+    return () => {
+      if (lenis) lenis.start();
+      else document.documentElement.style.overflow = "";
+    };
+  }, [locked, lenis]);
 };
 
 /* ------------------------------------------------------------------ */
-/*  Animated aurora background                                        */
+/*  Primitives                                                        */
 /* ------------------------------------------------------------------ */
-const Aurora = () => (
-  <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-    <div className="absolute -left-40 -top-40 h-[560px] w-[560px] rounded-full bg-indigo-600/25 blur-[120px] animate-aurora-1" />
-    <div className="absolute -right-40 top-10 h-[520px] w-[520px] rounded-full bg-fuchsia-600/20 blur-[130px] animate-aurora-2" />
-    <div className="absolute bottom-[-160px] left-1/3 h-[520px] w-[520px] rounded-full bg-violet-600/20 blur-[140px] animate-aurora-3" />
-    <div className="absolute inset-0 dotgrid opacity-60" />
-    <div className="absolute inset-0 bg-gradient-to-b from-ink-950/40 via-transparent to-ink-950" />
-  </div>
+const Logo = ({ className = "", accent = "currentColor" }) => (
+  <svg viewBox="0 0 100 100" className={className} fill="none" role="img" aria-label="Özgür Kaan Kaya">
+    {/* umlaut (Ö) */}
+    <circle cx="32" cy="5.5" r="4.2" fill={accent} />
+    <circle cx="68" cy="5.5" r="4.2" fill={accent} />
+    {/* ouroboros ring biting its tail */}
+    <path d="M86.14 38.26 A38 38 0 1 0 86.14 61.74" stroke="currentColor" strokeWidth="8" strokeLinecap="round" />
+    <path d="M77 39 Q92 33 90.5 46 Q89 59 79 57 Q73 49 77 39 Z" fill="currentColor" />
+    {/* symmetric double-K */}
+    <g stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M50 16 V84" strokeWidth="6" />
+      <path d="M50 50 L74 26 M50 50 L26 26 M50 50 L26 74 M50 50 L74 74" strokeWidth="5.5" />
+    </g>
+  </svg>
 );
 
-/* ------------------------------------------------------------------ */
-/*  Reveal-on-scroll wrapper                                          */
-/* ------------------------------------------------------------------ */
-const Reveal = ({ children, delay = 0, y = 22, className = "" }) => (
+// a line of text that slides up from behind a mask
+// the wrapper is observed (the child is clipped, so it never "intersects" itself)
+const maskVariants = { hidden: { y: "130%" }, show: { y: "0%" } };
+const MaskLine = ({ children, ready, delay = 0, className = "" }) => {
+  const trigger = ready === undefined
+    ? { whileInView: "show", viewport: { once: true, margin: "-40px" } }
+    : { animate: ready ? "show" : "hidden" };
+  return (
+    <motion.span
+      initial="hidden"
+      {...trigger}
+      className="-mb-[0.2em] -mt-[0.16em] block overflow-hidden pb-[0.2em] pt-[0.16em]"
+    >
+      <motion.span variants={maskVariants} transition={{ duration: 1.1, delay, ease: EASE }} className={`block ${className}`}>
+        {children}
+      </motion.span>
+    </motion.span>
+  );
+};
+
+const Reveal = ({ children, delay = 0, y = 24, className = "" }) => (
   <motion.div
     initial={{ opacity: 0, y }}
     whileInView={{ opacity: 1, y: 0 }}
-    viewport={{ once: true, margin: "-80px" }}
-    transition={{ duration: 0.7, delay, ease: [0.22, 1, 0.36, 1] }}
+    viewport={{ once: true, margin: "-60px" }}
+    transition={{ duration: 0.9, delay, ease: EASE }}
     className={className}
   >
     {children}
   </motion.div>
 );
 
-/* ------------------------------------------------------------------ */
-/*  Magnetic button — pulls toward the cursor                        */
-/* ------------------------------------------------------------------ */
-const Magnetic = ({ children, className = "", ...props }) => {
+// label that rolls up to a duplicate of itself on hover
+const RollText = ({ children }) => (
+  <span className="relative inline-flex overflow-hidden">
+    <span className="block transition-transform duration-500 ease-[cubic-bezier(.22,1,.36,1)] group-hover:-translate-y-full">
+      {children}
+    </span>
+    <span
+      aria-hidden
+      className="absolute left-0 top-full block transition-transform duration-500 ease-[cubic-bezier(.22,1,.36,1)] group-hover:-translate-y-full"
+    >
+      {children}
+    </span>
+  </span>
+);
+
+const Magnetic = ({ as = "a", strength = 0.35, children, className = "", ...props }) => {
   const ref = useRef(null);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
-  const sx = useSpring(x, { stiffness: 200, damping: 15 });
-  const sy = useSpring(y, { stiffness: 200, damping: 15 });
+  const sx = useSpring(x, { stiffness: 180, damping: 14, mass: 0.4 });
+  const sy = useSpring(y, { stiffness: 180, damping: 14, mass: 0.4 });
+  const Comp = as === "button" ? motion.button : motion.a;
 
   const onMove = (e) => {
     const r = ref.current.getBoundingClientRect();
-    x.set((e.clientX - (r.left + r.width / 2)) * 0.4);
-    y.set((e.clientY - (r.top + r.height / 2)) * 0.4);
+    x.set((e.clientX - (r.left + r.width / 2)) * strength);
+    y.set((e.clientY - (r.top + r.height / 2)) * strength);
   };
   const reset = () => {
     x.set(0);
@@ -124,1084 +197,1270 @@ const Magnetic = ({ children, className = "", ...props }) => {
   };
 
   return (
-    <motion.a
-      ref={ref}
-      onMouseMove={onMove}
-      onMouseLeave={reset}
-      style={{ x: sx, y: sy }}
-      className={className}
-      {...props}
-    >
+    <Comp ref={ref} onMouseMove={onMove} onMouseLeave={reset} style={{ x: sx, y: sy }} className={className} {...props}>
       {children}
-    </motion.a>
+    </Comp>
+  );
+};
+
+const Kicker = ({ children, className = "" }) => (
+  <span className={`font-mono text-[11px] uppercase tracking-[0.22em] text-bone-muted ${className}`}>{children}</span>
+);
+
+const SectionHead = ({ index, label, title, italic }) => (
+  <div className="mb-16 grid gap-6 border-t hairline pt-6 md:mb-24 md:grid-cols-12">
+    <div className="md:col-span-3">
+      <Kicker>
+        ({index}) — {label}
+      </Kicker>
+    </div>
+    <h2 className="font-serif text-[clamp(3.25rem,9vw,8.5rem)] leading-[0.88] tracking-[-0.02em] md:col-span-9">
+      <MaskLine>
+        {title} <span className="italic text-ember">{italic}</span>
+      </MaskLine>
+    </h2>
+  </div>
+);
+
+/* ------------------------------------------------------------------ */
+/*  Preloader — counter + curtain                                     */
+/* ------------------------------------------------------------------ */
+const loaderWords = ["Kod.", "Veri.", "Kahve."];
+
+const Preloader = ({ onDone }) => {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    let t;
+    const controls = animate(0, 100, {
+      duration: 2,
+      ease: [0.65, 0, 0.35, 1],
+      onUpdate: (v) => setN(Math.round(v)),
+      onComplete: () => {
+        t = setTimeout(onDone, 300);
+      },
+    });
+    return () => {
+      controls.stop();
+      clearTimeout(t);
+    };
+  }, [onDone]);
+
+  const wordIdx = Math.min(loaderWords.length - 1, Math.floor(n / 34));
+
+  return (
+    <motion.div
+      initial={{ clipPath: "inset(0% 0% 0% 0%)" }}
+      exit={{ clipPath: "inset(0% 0% 100% 0%)" }}
+      transition={{ duration: 1, ease: EASE_IN_OUT }}
+      className="fixed inset-0 z-[110] flex flex-col justify-between bg-ink-950 px-5 py-6 text-bone sm:px-10 sm:py-8"
+    >
+      <div className="flex justify-between">
+        <Kicker>Özgür Kaan Kaya</Kicker>
+        <Kicker>Portfolyo ©{YEAR}</Kicker>
+      </div>
+
+      <div className="flex items-center gap-5">
+        <Logo className="h-12 w-12 text-bone sm:h-16 sm:w-16" accent="#ff5b1f" />
+        <div className="flex gap-3 font-serif text-[clamp(2rem,6vw,4.5rem)] leading-none">
+          {loaderWords.map((w, i) => (
+            <span
+              key={w}
+              className={`transition-all duration-500 ${
+                i === wordIdx ? "italic text-ember" : i < wordIdx ? "text-bone" : "text-bone/15"
+              }`}
+            >
+              {w}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex items-end justify-between gap-6">
+        <div className="w-1/2 max-w-sm pb-3">
+          <Kicker>Hazırlanıyor</Kicker>
+          <div className="mt-3 h-px w-full bg-bone/10">
+            <div className="h-px bg-ember" style={{ width: `${n}%` }} />
+          </div>
+        </div>
+        <div className="font-serif text-[clamp(5.5rem,18vw,15rem)] leading-[0.78] tracking-tight">
+          {n}
+          <span className="text-ember">%</span>
+        </div>
+      </div>
+    </motion.div>
   );
 };
 
 /* ------------------------------------------------------------------ */
-/*  Spotlight card — tracks cursor to light its surface              */
+/*  Custom cursor — dot + lagging ring that carries a label          */
 /* ------------------------------------------------------------------ */
-const SpotlightCard = ({ children, className = "", ...props }) => {
-  const onMove = useCallback((e) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    e.currentTarget.style.setProperty("--x", `${e.clientX - r.left}px`);
-    e.currentTarget.style.setProperty("--y", `${e.clientY - r.top}px`);
-  }, []);
+const Cursor = () => {
+  const [enabled, setEnabled] = useState(false);
+  const [hover, setHover] = useState(false);
+  const [label, setLabel] = useState("");
+  const [hidden, setHidden] = useState(true);
+  const x = useMotionValue(-100);
+  const y = useMotionValue(-100);
+  const rx = useSpring(x, { stiffness: 420, damping: 34, mass: 0.6 });
+  const ry = useSpring(y, { stiffness: 420, damping: 34, mass: 0.6 });
+
+  useEffect(() => {
+    if (!window.matchMedia("(pointer: fine)").matches) return;
+    setEnabled(true);
+    document.documentElement.classList.add("has-cursor");
+
+    const onMove = (e) => {
+      x.set(e.clientX);
+      y.set(e.clientY);
+      setHidden(false);
+      const t = e.target.closest ? e.target.closest("[data-cursor], a, button") : null;
+      setHover(!!t);
+      setLabel(t ? t.getAttribute("data-cursor") || "" : "");
+    };
+    const onLeave = () => setHidden(true);
+    window.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseleave", onLeave);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseleave", onLeave);
+      document.documentElement.classList.remove("has-cursor");
+    };
+  }, [x, y]);
+
+  if (!enabled) return null;
+  const size = label ? 92 : hover ? 54 : 30;
+
   return (
-    <div onMouseMove={onMove} className={`spotlight glow-border ${className}`} {...props}>
-      {children}
+    <div aria-hidden className={`transition-opacity duration-300 ${hidden ? "opacity-0" : "opacity-100"}`}>
+      <motion.div
+        style={{ x: rx, y: ry }}
+        className={`pointer-events-none fixed left-0 top-0 z-[120] ${label ? "" : "mix-blend-difference"}`}
+      >
+        <motion.div
+          animate={{ width: size, height: size }}
+          transition={{ type: "spring", stiffness: 300, damping: 24 }}
+          className={`grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border font-mono text-[10px] uppercase tracking-[0.18em] transition-colors duration-300 ${
+            label ? "border-ember bg-ember text-ink-950" : "border-bone/60 bg-transparent"
+          }`}
+        >
+          {label}
+        </motion.div>
+      </motion.div>
+      <motion.div style={{ x, y }} className="pointer-events-none fixed left-0 top-0 z-[121] mix-blend-difference">
+        <div className={`h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-bone ${label ? "opacity-0" : ""}`} />
+      </motion.div>
     </div>
   );
 };
 
 /* ------------------------------------------------------------------ */
-/*  Navbar                                                            */
+/*  Editorial column guides                                           */
 /* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
-/*  Logo — ouroboros "Ö" ring with umlaut + symmetric double-K (ÖKK)   */
-/* ------------------------------------------------------------------ */
-const Logo = ({ className = "" }) => (
-  <svg viewBox="0 0 100 100" className={className} fill="none" role="img" aria-label="Özgür Kaan Kaya">
-    <defs>
-      <linearGradient id="okk-grad" x1="8" y1="6" x2="92" y2="94" gradientUnits="userSpaceOnUse">
-        <stop stopColor="#a78bfa" />
-        <stop offset="0.5" stopColor="#e879f9" />
-        <stop offset="1" stopColor="#fbbf24" />
-      </linearGradient>
-    </defs>
-
-    {/* umlaut (Ö) — sits above the ring, spread to the sides, not touching */}
-    <circle cx="32" cy="5.5" r="4.2" fill="#fbbf24" />
-    <circle cx="68" cy="5.5" r="4.2" fill="#fbbf24" />
-
-    {/* ouroboros body — snake curved into the "O" */}
-    <path d="M86.14 38.26 A38 38 0 1 0 86.14 61.74" stroke="url(#okk-grad)" strokeWidth="8" strokeLinecap="round" />
-    {/* head biting the tail */}
-    <path d="M77 39 Q92 33 90.5 46 Q89 59 79 57 Q73 49 77 39 Z" fill="url(#okk-grad)" />
-    {/* eye */}
-    <circle cx="84.5" cy="43" r="1.7" fill="#0b0b16" />
-
-    {/* symmetric double-K monogram inside the ring */}
-    <g stroke="url(#okk-grad)" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M50 16 V84" strokeWidth="6" />
-      <path d="M50 50 L74 26 M50 50 L26 26 M50 50 L26 74 M50 50 L74 74" strokeWidth="5.5" />
-    </g>
-  </svg>
-);
-
-const links = [
-  { id: "home", label: "Ana Sayfa" },
-  { id: "about", label: "Hakkımda" },
-  { id: "experience", label: "Deneyim" },
-  { id: "projects", label: "Projeler" },
-];
-
-const Navbar = () => {
-  const [active, setActive] = useState("home");
-  const [open, setOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-
-  const { scrollYProgress } = useScroll();
-  const bar = useSpring(scrollYProgress, { stiffness: 120, damping: 30, mass: 0.3 });
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  useEffect(() => {
-    const obs = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((en) => {
-          if (en.isIntersecting) setActive(en.target.id);
-        });
-      },
-      { rootMargin: "-45% 0px -50% 0px" }
-    );
-    links.forEach((l) => {
-      const el = document.getElementById(l.id);
-      if (el) obs.observe(el);
-    });
-    return () => obs.disconnect();
-  }, []);
-
-  return (
-    <>
-      <motion.div
-        style={{ scaleX: bar }}
-        className="fixed left-0 top-0 z-[60] h-[2px] w-full origin-left bg-gradient-to-r from-indigo-500 via-fuchsia-500 to-spark"
-      />
-      <nav
-        className={`fixed top-0 z-50 w-full transition-all duration-300 ${
-          scrolled ? "border-b border-white/10 bg-ink-950/70 backdrop-blur-xl" : "border-b border-transparent"
-        }`}
-      >
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
-          <a href="#home" className="group flex items-center" aria-label="Özgür Kaan Kaya">
-            <Logo className="h-10 w-10 drop-shadow-[0_2px_10px_rgba(139,92,246,0.35)] transition-transform duration-300 group-hover:scale-105 group-hover:-rotate-6" />
-          </a>
-
-          <div className="hidden items-center gap-1 md:flex">
-            {links.map((l) => (
-              <a
-                key={l.id}
-                href={`#${l.id}`}
-                className={`relative rounded-full px-4 py-2 text-sm font-medium transition ${
-                  active === l.id ? "text-white" : "text-slate-400 hover:text-white"
-                }`}
-              >
-                {active === l.id && (
-                  <motion.span
-                    layoutId="nav-pill"
-                    className="absolute inset-0 rounded-full bg-white/10"
-                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                  />
-                )}
-                <span className="relative z-10">{l.label}</span>
-              </a>
-            ))}
-          </div>
-
-          <a
-            href="#contact"
-            className="hidden rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white transition hover:border-spark/60 hover:text-spark md:inline-block"
-          >
-            Konuşalım
-          </a>
-
-          <button
-            onClick={() => setOpen((o) => !o)}
-            className="grid h-10 w-10 place-items-center rounded-lg border border-white/10 text-white md:hidden"
-            aria-label="Menü"
-          >
-            {open ? <X size={18} /> : <Menu size={18} />}
-          </button>
-        </div>
-
-        <AnimatePresence>
-          {open && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden border-t border-white/10 bg-ink-950/95 backdrop-blur-xl md:hidden"
-            >
-              <div className="flex flex-col px-5 py-3">
-                {links.map((l) => (
-                  <a
-                    key={l.id}
-                    href={`#${l.id}`}
-                    onClick={() => setOpen(false)}
-                    className={`py-3 text-base ${active === l.id ? "text-spark" : "text-slate-300"}`}
-                  >
-                    {l.label}
-                  </a>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </nav>
-    </>
-  );
-};
-
-/* ------------------------------------------------------------------ */
-/*  Hero                                                              */
-/* ------------------------------------------------------------------ */
-const heroWords = ["otomasyon", "iç sistemler", "veri analizi", "kurumsal web"];
-
-const Hero = () => {
-  const [wi, setWi] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setWi((i) => (i + 1) % heroWords.length), 2200);
-    return () => clearInterval(t);
-  }, []);
-
-  const title = "Özgür Kaan Kaya";
-
-  return (
-    <section id="home" className="relative flex min-h-screen items-center px-5 pt-28 pb-16">
-      <div className="mx-auto w-full max-w-5xl">
-        <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="mb-7 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-medium text-slate-300"
-        >
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-          </span>
-          Yazılım Geliştirme Uzmanı · Türkiye
-        </motion.div>
-
-        <h1 className="font-display text-5xl font-bold leading-[1.08] tracking-tight text-white sm:text-7xl md:text-8xl">
-          <span className="block pb-2">
-            {title.split(" ").map((word, wIdx) => (
-              <span key={wIdx} className="mr-4 inline-block">
-                {word.split("").map((ch, i) => (
-                  <motion.span
-                    key={i}
-                    initial={{ y: 24, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{
-                      delay: 0.15 + wIdx * 0.1 + i * 0.03,
-                      duration: 0.7,
-                      ease: [0.22, 1, 0.36, 1],
-                    }}
-                    className="inline-block"
-                  >
-                    {ch}
-                  </motion.span>
-                ))}
-              </span>
-            ))}
-          </span>
-        </h1>
-
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.6, duration: 0.8 }}
-          className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 font-display text-2xl font-medium text-slate-400 sm:text-3xl"
-        >
-          <span>Python ile</span>
-          <span className="relative inline-grid h-[1.4em] overflow-hidden align-bottom">
-            <AnimatePresence mode="wait">
-              <motion.span
-                key={wi}
-                initial={{ y: "100%", opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: "-100%", opacity: 0 }}
-                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                className="text-gradient whitespace-nowrap font-semibold"
-              >
-                {heroWords[wi]}
-              </motion.span>
-            </AnimatePresence>
-          </span>
-        </motion.div>
-
-        <motion.p
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.8, duration: 0.8 }}
-          className="mt-8 max-w-2xl text-base leading-relaxed text-slate-400 sm:text-lg"
-        >
-          Yazılım Geliştirme Uzmanı olarak Python tabanlı iç sistemler, React ile kurumsal web
-          çözümleri ve uçtan uca otomasyonlar geliştiriyorum. Kodla süreçleri hızlandırmayı, veriyi
-          değere dönüştürmeyi ve işletmeleri daha akıllı çalıştırmayı seviyorum.
-        </motion.p>
-
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1, duration: 0.8 }}
-          className="mt-10 flex flex-wrap items-center gap-4"
-        >
-          <Magnetic
-            href="#contact"
-            className="group inline-flex cursor-pointer items-center gap-2 rounded-full bg-spark px-7 py-3.5 font-display text-sm font-bold text-ink-950 shadow-lg shadow-amber-500/20 transition-shadow hover:shadow-amber-500/40"
-          >
-            İletişime Geç
-            <ArrowUpRight size={17} className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-          </Magnetic>
-          <Magnetic
-            href="#projects"
-            className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/15 px-7 py-3.5 font-display text-sm font-semibold text-white transition hover:border-violet-400/60 hover:bg-white/5"
-          >
-            Projelerimi Gör
-          </Magnetic>
-        </motion.div>
-
-        {/* stat strip */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.2, duration: 0.8 }}
-          className="mt-16 grid max-w-lg grid-cols-3 gap-6"
-        >
-          {[
-            { k: "5+", v: "Aktif proje" },
-            { k: "20+", v: "Tamamlanan proje" },
-            { k: "2", v: "Ülkede yaşam" },
-          ].map((s) => (
-            <div key={s.v}>
-              <div className="font-display text-3xl font-bold text-white">{s.k}</div>
-              <div className="mt-1 text-xs text-slate-500">{s.v}</div>
-            </div>
-          ))}
-        </motion.div>
-      </div>
-    </section>
-  );
-};
-
-/* ------------------------------------------------------------------ */
-/*  Tech marquee                                                      */
-/* ------------------------------------------------------------------ */
-const stack = [
-  "Python", "React.js", "Full-stack", "Otomasyon", "Veri Analizi", "Tailwind CSS",
-  "E-Fatura Otomasyonu", "Streamlit", "Plotly", "Excel", "Raporlama", "Süreç Optimizasyonu",
-];
-
-const Marquee = () => (
-  <div className="marquee-mask relative border-y border-white/5 bg-white/[0.015] py-5">
-    <div className="flex w-max animate-marquee gap-4">
-      {[...stack, ...stack].map((s, i) => (
-        <span
-          key={i}
-          className="flex items-center gap-2 whitespace-nowrap rounded-full border border-white/10 px-4 py-1.5 font-mono text-xs text-slate-400"
-        >
-          <span className="h-1.5 w-1.5 rounded-full bg-violet-400/70" />
-          {s}
-        </span>
+const GridLines = () => (
+  <div aria-hidden className="pointer-events-none fixed inset-0 z-0 px-5 sm:px-10">
+    <div className="grid h-full grid-cols-4 md:grid-cols-12">
+      {Array.from({ length: 12 }).map((_, i) => (
+        <span key={i} className={`border-l border-bone/[0.035] ${i >= 4 ? "hidden md:block" : ""} ${i === 11 || i === 3 ? "border-r" : ""} ${i === 3 ? "md:border-r-0" : ""}`} />
       ))}
     </div>
   </div>
 );
 
 /* ------------------------------------------------------------------ */
-/*  Section heading                                                  */
+/*  Navbar                                                            */
 /* ------------------------------------------------------------------ */
-const Heading = ({ index, title, kicker }) => (
-  <Reveal className="mb-12">
-    <div className="mb-3 flex items-center gap-3 font-mono text-xs text-violet-400">
-      <span>{index}</span>
-      <span className="h-px w-8 bg-violet-400/40" />
-      <span className="uppercase tracking-widest text-slate-500">{kicker}</span>
-    </div>
-    <h2 className="font-display text-4xl font-bold text-white sm:text-5xl">{title}</h2>
-  </Reveal>
-);
+const Navbar = () => {
+  const lenis = useLenis();
+  const time = useClock();
+  const [active, setActive] = useState("");
+  const [open, setOpen] = useState(false);
+  useScrollLock(open);
 
-/* ------------------------------------------------------------------ */
-/*  About                                                             */
-/* ------------------------------------------------------------------ */
-const skillGroups = [
-  {
-    icon: Code,
-    color: "text-violet-400",
-    dot: "bg-violet-400",
-    title: "Geliştirme",
-    items: ["Python", "React.js", "Tailwind CSS", "Web Tasarım", "Otomasyon"],
-  },
-  {
-    icon: TrendingUp,
-    color: "text-spark",
-    dot: "bg-spark",
-    title: "İş & Analiz",
-    items: ["Veri Analizi", "Raporlama", "İş Geliştirme", "Operasyon & Süreç Optimizasyonu"],
-  },
-];
-
-const About = () => (
-  <section id="about" className="relative px-5 py-28">
-    <div className="mx-auto max-w-6xl">
-      <Heading index="01" kicker="Kimim" title="Hakkımda" />
-
-      <div className="grid gap-10 md:grid-cols-5">
-        <div className="md:col-span-3">
-          <Reveal>
-            <p className="text-lg leading-relaxed text-slate-300">
-              Yazılım geliştirme ile yöneticiliği aynı kişide birleştiren çok yönlü bir
-              profesyonelim. Türkiye merkezli çalışıyor, hem teknik hem de operasyonel tarafta
-              üretken çözümler kuruyorum.
-            </p>
-          </Reveal>
-          <Reveal delay={0.1}>
-            <p className="mt-5 leading-relaxed text-slate-400">
-              Freelance tasarımcı olarak başladığım kariyerimde satış ve operasyonda görev aldıktan
-              sonra, Metro Holding bünyesinde gösterdiğim başarılar sonrası yönetim kuruluna girdim.
-              Şu anda Yazılım Geliştirme Uzmanı olarak Python tabanlı iç sistemler, React ile
-              tasarımlar ve kurumsal web çözümleri geliştiriyorum.
-            </p>
-          </Reveal>
-
-          <div className="mt-8 grid gap-4 sm:grid-cols-2">
-            {skillGroups.map((g, i) => {
-              const Icon = g.icon;
-              return (
-                <Reveal key={g.title} delay={0.15 + i * 0.05}>
-                  <SpotlightCard className="h-full rounded-2xl glass p-5">
-                    <Icon className={`mb-3 ${g.color}`} size={22} />
-                    <h3 className="mb-3 font-display font-bold text-white">{g.title}</h3>
-                    <ul className="space-y-1.5 text-sm text-slate-400">
-                      {g.items.map((x) => (
-                        <li key={x} className="flex gap-2">
-                          <span className={`mt-1.5 h-1 w-1 shrink-0 rounded-full ${g.dot}`} />
-                          {x}
-                        </li>
-                      ))}
-                    </ul>
-                  </SpotlightCard>
-                </Reveal>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Education */}
-        <div className="md:col-span-2">
-          <Reveal delay={0.15}>
-            <SpotlightCard className="rounded-2xl glass p-7">
-              <div className="mb-6 flex items-center gap-2">
-                <Sparkles size={18} className="text-spark" />
-                <h3 className="font-display text-lg font-bold text-white">Eğitim</h3>
-              </div>
-              <ul className="space-y-6">
-                <li className="relative border-l border-white/10 pl-5">
-                  <span className="absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full bg-violet-500" />
-                  <div className="font-mono text-xs text-violet-400">2022 - 2024</div>
-                  <div className="mt-1 font-medium text-white">Bilgisayar Bilimleri Lisans</div>
-                  <div className="text-sm text-slate-500">Wroclaw University of Horyzont</div>
-                </li>
-                <li className="relative border-l border-white/10 pl-5">
-                  <span className="absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full bg-fuchsia-500" />
-                  <div className="font-mono text-xs text-violet-400">2018 - 2022</div>
-                  <div className="mt-1 font-medium text-white">Bilgisayar Bilimleri Lisans</div>
-                  <div className="text-sm text-slate-500">Wroclaw University of Science & Technology</div>
-                </li>
-              </ul>
-              <div className="mt-6 border-t border-white/10 pt-5">
-                <h4 className="mb-2 font-display text-sm font-bold text-white">Diller</h4>
-                <div className="flex flex-wrap gap-2 text-xs text-slate-400">
-                  <span className="rounded-full border border-white/10 px-3 py-1">Türkçe · Ana Dil</span>
-                  <span className="rounded-full border border-white/10 px-3 py-1">İngilizce · Profesyonel</span>
-                </div>
-              </div>
-            </SpotlightCard>
-          </Reveal>
-        </div>
-      </div>
-    </div>
-  </section>
-);
-
-/* ------------------------------------------------------------------ */
-/*  Experience                                                        */
-/* ------------------------------------------------------------------ */
-const experiences = [
-  {
-    role: "Yazılım Geliştirme Uzmanı",
-    company: "Metro Holding",
-    date: "Şubat 2026 – Halen",
-    location: "Türkiye",
-    icon: Cpu,
-    current: true,
-    description: [
-      "Python kullanarak işletmelerimizin operasyonlarını yöneten yönetici (admin) arayüzleri geliştirdim.",
-      "React ve frontend kütüphaneleriyle şirketimizin kurumsal web sitelerini geliştirdim.",
-      "Şubelerin sipariş süreçlerini, tam entegre çalışan full-stack bir uygulama olarak baştan sona geliştirdim.",
-    ],
-  },
-  {
-    role: "Yönetim Kurulu Başkan Yardımcısı",
-    company: "Ekspres Kafe (Metro Holding)",
-    date: "Kasım 2025 – Ocak 2026",
-    location: "Türkiye",
-    icon: Coffee,
-    description: [
-      "Coffee Express ve KöftExpress markalarımızın operasyonel ve stratejik yönetiminde aktif rol aldım.",
-      "Türk kahvesi ve menemen markalarımızın patent sürecini yönetip tescilini aldım.",
-      "Tedarikçi ilişkilerini yöneterek aynı kaliteyi daha uygun maliyetle sağlayan satın alma stratejileri geliştirdim.",
-    ],
-  },
-  {
-    role: "İş Analisti",
-    company: "Metro Holding",
-    date: "Ağustos 2025 – Ekim 2025",
-    location: "Türkiye",
-    icon: Database,
-    description: [
-      "Satış verilerini işleyen otomasyon yazılımları geliştirerek ciro, ürün ve operasyon performansı raporları oluşturdum.",
-      "İş süreçlerini analiz edip iyileştirme fırsatlarını belirledim ve yönetime düzenli analitik içgörüler sundum.",
-    ],
-  },
-  {
-    role: "Hesap Yöneticisi",
-    company: "Jouret Development Solutions",
-    date: "Şubat 2024 – Kasım 2024",
-    location: "Polonya",
-    icon: TrendingUp,
-    description: [
-      "Müşteri hedeflerine uygun, mobil uyumlu landing page'ler tasarlayıp geliştirerek dönüşüm oranlarını artırdım.",
-      "Müşteri araştırması, proje görüşmeleri ve satış süreçlerini uçtan uca yönettim (HubSpot, SalesQL vb.).",
-    ],
-  },
-  {
-    role: "Freelance Web Geliştirici",
-    company: "Freelancer",
-    date: "Mayıs 2023 – Ocak 2024",
-    location: "Polonya",
-    icon: Code,
-    description: [
-      "React.js ve Tailwind CSS ile modern, mobil uyumlu web siteleri geliştirdim.",
-      "Güncel teknolojileri takip ederek performans ve erişilebilirliğe odaklı, başarılı bir UX/UI deneyimi tasarladım.",
-    ],
-  },
-];
-
-const Experience = () => (
-  <section id="experience" className="relative px-5 py-28">
-    <div className="mx-auto max-w-4xl">
-      <Heading index="02" kicker="Yolculuk" title="İş Deneyimi" />
-      <div className="relative">
-        <div className="absolute left-[15px] top-2 h-full w-px bg-gradient-to-b from-violet-500/60 via-white/10 to-transparent md:left-1/2" />
-        <div className="space-y-8">
-          {experiences.map((exp, index) => {
-            const Icon = exp.icon;
-            return (
-              <Reveal key={index} delay={index * 0.05}>
-                <div className="relative pl-12 md:pl-0">
-                  <span className="absolute left-[7px] top-6 z-10 grid h-4 w-4 place-items-center rounded-full border border-violet-400 bg-ink-950 md:left-1/2 md:-translate-x-1/2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
-                  </span>
-                  <div
-                    className={`md:w-1/2 ${
-                      index % 2 === 0 ? "md:pr-10" : "md:ml-auto md:pl-10"
-                    }`}
-                  >
-                    <SpotlightCard className="rounded-2xl glass p-6 transition duration-300 hover:-translate-y-1">
-                      <div className="mb-4 flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 text-violet-300">
-                            <Icon size={18} />
-                          </div>
-                          <div>
-                            <h3 className="font-display font-bold leading-tight text-white">{exp.role}</h3>
-                            <span className="text-sm text-violet-300">{exp.company}</span>
-                          </div>
-                        </div>
-                        {exp.current && (
-                          <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-medium text-emerald-300">
-                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-                            Halen
-                          </span>
-                        )}
-                      </div>
-                      <div className="mb-4 flex items-center gap-3 font-mono text-xs text-slate-500">
-                        <span>{exp.date}</span>
-                        <span className="flex items-center gap-1">
-                          <MapPin size={11} /> {exp.location}
-                        </span>
-                      </div>
-                      <ul className="space-y-2 text-sm text-slate-400">
-                        {exp.description.map((item, i) => (
-                          <li key={i} className="flex gap-2">
-                            <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-violet-400/70" />
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                    </SpotlightCard>
-                  </div>
-                </div>
-              </Reveal>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  </section>
-);
-
-/* ------------------------------------------------------------------ */
-/*  Projects data                                                     */
-/* ------------------------------------------------------------------ */
-const featured = [
-  {
-    title: "Şube Sipariş & Tedarik Otomasyonu",
-    domain: "siparis.coffeeexpress.com.tr",
-    images: ["/images/siparis1.png", "/images/siparis2.png", "/images/siparis3.png"],
-    emoji: "📦",
-    accent: "from-violet-500/30 to-fuchsia-500/15",
-    kind: "internal",
-    tags: ["React", "Python", "Full-stack", "E-Fatura", "Otomasyon"],
-    description:
-      "Şubelerin siparişlerini tek sistemden verip tedarik, irsaliye ve e-fatura süreçlerini uçtan uca otomatikleştiren full-stack uygulama.",
-    fullDescription:
-      "Zincir şubelerimizin sipariş süreçlerini baştan sona dijitalleştiren, tam entegre full-stack bir uygulama olarak geliştirdim. Şubeler siparişlerini tek panelden veriyor; sistem tedarik, irsaliye ve e-fatura adımlarını otomatik olarak yürütüyor. Böylece manuel evrak ve takip yükü ortadan kalkıyor, tedarik zinciri gerçek zamanlı ve hatasız işliyor. En son geliştirdiğim ve şu anda aktif kullanılan sistem.",
-  },
-  {
-    title: "Canlı Operasyon & Analitik Panel",
-    domain: "ops.coffeeexpress.com.tr",
-    images: ["/images/ops2.png", "/images/ops1.png", "/images/ops3.png"],
-    emoji: "📊",
-    accent: "from-indigo-500/30 to-violet-500/15",
-    kind: "internal",
-    tags: ["Python", "Veri Analizi", "Dashboard", "Projeksiyon"],
-    description:
-      "Tüm işletmelerin satış-alış verilerini anlık olarak tek panelde toplayıp modelle projeksiyon üreten analitik arayüz.",
-    fullDescription:
-      "İşletmelerimizin satış, alış ve ürün bazlı tüm detaylarını anlık olarak tek panelde bir araya getiren analitik bir arayüz geliştirdim. Yönetim, hangi üründen ne kadar satıldığını/alındığını canlı olarak görebiliyor; sistem bu veriler üzerinde model çalıştırarak ileriye dönük projeksiyonlar üretiyor. Karar alma süreçlerini veriye dayalı ve hızlı hale getiren merkezî bir operasyon merkezi.",
-  },
-  {
-    title: "Coffee Express — Kurumsal Web",
-    domain: "coffeeexpress.com.tr",
-    url: "https://coffeeexpress.com.tr",
-    images: ["/images/coffee1.png", "/images/coffee2.png"],
-    emoji: "☕",
-    accent: "from-amber-500/30 to-orange-500/15",
-    kind: "live",
-    tags: ["React", "Tailwind CSS", "Kurumsal", "Web Tasarım"],
-    description:
-      "Coffee Express markası için sıfırdan tasarlayıp geliştirdiğim kurumsal web sitesi.",
-    fullDescription:
-      "Coffee Express markamız için kurumsal web sitesini sıfırdan tasarlayıp geliştirdim. Marka kimliğini yansıtan modern, hızlı ve mobil uyumlu bir arayüz kurdum; içerik yapısı ve kullanıcı deneyimi marka tanıtımına odaklı olacak şekilde kurgulandı.",
-  },
-  {
-    title: "KöftExpress — Kurumsal Web",
-    domain: "koftexpress.com.tr",
-    url: "https://koftexpress.com.tr",
-    images: ["/images/kofte1.png", "/images/kofte2.png"],
-    emoji: "🍢",
-    accent: "from-rose-500/30 to-fuchsia-500/15",
-    kind: "live",
-    tags: ["React", "Tailwind CSS", "Kurumsal", "Web Tasarım"],
-    description:
-      "KöftExpress markası için tasarlayıp geliştirdiğim kurumsal web sitesi.",
-    fullDescription:
-      "KöftExpress markamız için kurumsal web sitesini tasarlayıp geliştirdim. Coffee Express ile tutarlı bir tasarım dili kurarak, markanın dijital vitrinini modern ve responsive bir yapıda hayata geçirdim.",
-  },
-];
-
-const others = [
-  {
-    title: "World Bank Nüfus Dashboard (1960–2024)",
-    tags: ["Python", "Streamlit", "Pandas", "Plotly"],
-    thumbnail: "/images/verianalizi1.png",
-    description: "World Bank nüfus verisiyle ülke analizi, karşılaştırma ve harita dashboard'u.",
-    fullDescription:
-      "World Bank'in 1960–2024 toplam nüfus verisini kullanarak interaktif bir dashboard geliştirdim. Uygulama; ülke bazlı trend analizi, yıllık büyüme oranları ve anomali paneli, çoklu ülke karşılaştırma, filtrelenebilir keşfet sayfası (CSV indirme) ve dünya haritası (nüfus / yüzde değişim / mutlak değişim) özelliklerini içerir. Projeyi analiz yeteneklerimi geliştirmek amacıyla geliştirdim.",
-    github: "https://github.com/odoublek/total-population-dashboard",
-    images: ["/images/verianalizi1.png", "/images/verianalizi2.png", "/images/verianalizi3.png"],
-  },
-  {
-    title: "Satış Raporlama & Otomasyon Sistemi",
-    tags: ["Python", "Excel", "Otomasyon", "Raporlama"],
-    thumbnail: "/images/toplamcirolar.png",
-    description: "Excel verilerini işleyip günlük/haftalık/aylık raporlar üreten Python otomasyonu.",
-    fullDescription:
-      "Excel'den günlük, saatlik, haftalık veya aylık düzeyde veri çekip işleyen bir Python otomasyon sistemi tasarladım. Sistem; veri temizleme, zaman serisi özetleri, grafik üretimi ve KPI hesaplamalarını otomatikleştirir. Çıktılar PDF/Word raporları ve Excel özet dosyaları olarak otomatik üretilir: ürünün haftalık/aylık satış grafiği, şubelere göre saatlik satış ısı haritası ve toplam sipariş & ciro trend çizgileri.",
-    images: ["/images/aylıksatislar.png", "/images/pidetoplamsatislar.png", "/images/saatdilimisatislar.png"],
-  },
-  {
-    title: "Medikal Klinik Websitesi",
-    tags: ["Tailwind CSS", "JavaScript", "Sağlık Turizmi"],
-    thumbnail: "/images/websitesi1.png",
-    description: "Uluslararası hastalar için modern, çok dilli klinik web sitesi.",
-    fullDescription:
-      "İstanbul merkezli bir medikal turizm kliniği için tasarladığım web sitesi; klinik hizmetleri, doktor profilleri, hasta yorumları ve iletişim bölümlerini içerir. Responsive tasarım ve Tailwind CSS ile modern bir arayüz kurdum; çok dilli yapı ve hızlı erişim odaklı sayfa düzenleriyle uluslararası hastalar için etkili bir tanıtım platformu sağladım.",
-    github: "https://github.com/odoublek/turan-atilla-clinic",
-    images: ["/images/websitesi2.png", "/images/websitesi3.png", "/images/websitesi4.png"],
-  },
-  {
-    title: "Kömür Tüketimi – Sıcaklık Analizi",
-    tags: ["Python", "Pandas", "Matplotlib"],
-    thumbnail: "/images/coal_usage_trend.png",
-    description: "İngiltere kömür tüketimi ve sıcaklık değişimi arasındaki ilişki analizi.",
-    fullDescription:
-      "İngiltere'de yıllara göre kömür tüketiminin nasıl değiştiğini ve sıcaklık dalgalanmalarıyla ilişkisini inceledim. Veriler temizlendi, yıllık ortalamalar çıkarıldı ve regresyon modeliyle tahminler üretildi. Grafikler, hem sıcaklığın hem de tüketimin uzun yıllardaki eğilimlerini açık biçimde ortaya koyuyor.",
-    github: "https://github.com/odoublek/SystemAnalysisProject",
-    images: ["/images/prediction_plot.png", "/images/coal_usage_trend.png", "/images/temperature_trend.png"],
-  },
-];
-
-/* --- Featured (browser-mockup) card --- */
-const FeaturedCard = ({ project, onClick, index }) => (
-  <Reveal delay={(index % 2) * 0.08}>
-    <SpotlightCard
-      onClick={onClick}
-      className="group h-full cursor-pointer overflow-hidden rounded-2xl glass transition duration-300 hover:-translate-y-1.5"
-    >
-      {/* browser chrome preview */}
-      <div className={`relative overflow-hidden bg-gradient-to-br ${project.accent}`}>
-        <div className="flex items-center gap-2 border-b border-white/10 bg-ink-950/40 px-4 py-2.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
-          <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
-          <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
-          <span className="ml-2 flex-1 truncate rounded-md bg-ink-950/50 px-3 py-1 font-mono text-[11px] text-slate-300">
-            {project.domain}
-          </span>
-        </div>
-        <div className="relative h-44 overflow-hidden">
-          {project.images ? (
-            <img
-              src={project.images[0]}
-              alt={project.title}
-              loading="lazy"
-              className="h-full w-full object-cover object-top opacity-90 transition duration-700 group-hover:scale-105 group-hover:opacity-100"
-            />
-          ) : (
-            <div className="grid h-full place-items-center dotgrid">
-              <span className="text-5xl drop-shadow-lg transition-transform duration-500 group-hover:scale-110">
-                {project.emoji}
-              </span>
-            </div>
-          )}
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink-900/70 via-transparent to-transparent" />
-          <span
-            className={`absolute right-3 top-3 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold backdrop-blur ${
-              project.kind === "live"
-                ? "bg-emerald-400/20 text-emerald-200"
-                : "bg-ink-950/50 text-slate-200"
-            }`}
-          >
-            {project.kind === "live" ? (
-              <>
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Canlı
-              </>
-            ) : (
-              <>
-                <Lock size={10} /> İç Sistem
-              </>
-            )}
-          </span>
-        </div>
-      </div>
-
-      <div className="p-6">
-        <div className="mb-3 flex flex-wrap gap-2">
-          {project.tags.slice(0, 4).map((tag, i) => (
-            <span key={i} className="rounded-md bg-violet-500/10 px-2 py-1 font-mono text-[11px] text-violet-300">
-              {tag}
-            </span>
-          ))}
-        </div>
-        <h3 className="font-display text-lg font-bold leading-snug text-white">{project.title}</h3>
-        <p className="mt-2 text-sm leading-relaxed text-slate-400">{project.description}</p>
-        <div className="mt-4 flex items-center justify-between">
-          <span className="inline-flex items-center gap-1 text-sm font-medium text-spark">
-            Detayları gör <ArrowRight size={14} />
-          </span>
-          {project.kind === "live" && (
-            <span className="inline-flex items-center gap-1 text-xs text-slate-500">
-              <Globe size={13} /> Ziyaret et
-            </span>
-          )}
-        </div>
-      </div>
-    </SpotlightCard>
-  </Reveal>
-);
-
-/* --- Other (image) card --- */
-const ImageCard = ({ project, onClick, index }) => (
-  <Reveal delay={(index % 4) * 0.06}>
-    <SpotlightCard
-      onClick={onClick}
-      className="group h-full cursor-pointer overflow-hidden rounded-2xl glass transition duration-300 hover:-translate-y-1.5"
-    >
-      <div className="relative h-36 overflow-hidden">
-        <img
-          src={project.thumbnail}
-          alt={project.title}
-          loading="lazy"
-          className="h-full w-full object-cover opacity-75 transition duration-700 group-hover:scale-110 group-hover:opacity-100"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-ink-900 via-ink-900/20 to-transparent" />
-      </div>
-      <div className="p-5">
-        <div className="mb-2 flex flex-wrap gap-1.5">
-          {project.tags.slice(0, 2).map((tag, i) => (
-            <span key={i} className="rounded bg-violet-500/10 px-1.5 py-0.5 font-mono text-[10px] text-violet-300">
-              {tag}
-            </span>
-          ))}
-        </div>
-        <h3 className="font-display text-sm font-bold leading-snug text-white">{project.title}</h3>
-        <p className="mt-1.5 text-xs leading-relaxed text-slate-400">{project.description}</p>
-      </div>
-    </SpotlightCard>
-  </Reveal>
-);
-
-/* --- Project modal --- */
-const ProjectModal = ({ project, onClose }) => {
-  const hasImages = project.images && project.images.length > 0;
-  const [slide, setSlide] = useState(0);
-  const next = () => setSlide((s) => (s + 1) % project.images.length);
-  const prev = () => setSlide((s) => (s === 0 ? project.images.length - 1 : s - 1));
+  const { scrollYProgress } = useScroll();
+  const bar = useSpring(scrollYProgress, { stiffness: 120, damping: 30, mass: 0.3 });
 
   useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === "Escape") onClose();
-      if (hasImages && e.key === "ArrowRight") next();
-      if (hasImages && e.key === "ArrowLeft") prev();
-    };
-    document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project]);
+    const obs = new IntersectionObserver(
+      (entries) => entries.forEach((en) => en.isIntersecting && setActive(en.target.id)),
+      { rootMargin: "-45% 0px -50% 0px" }
+    );
+    ["home", ...navLinks.map((l) => l.id)].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) obs.observe(el);
+    });
+    return () => obs.disconnect();
+  }, []);
+
+  const goMobile = (e, id) => {
+    e.preventDefault();
+    setOpen(false);
+    if (lenis) {
+      lenis.start();
+      lenis.scrollTo(`#${id}`, { duration: 1.6 });
+    } else {
+      document.getElementById(id)?.scrollIntoView();
+    }
+  };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      onClick={onClose}
-      className="fixed inset-0 z-[80] grid place-items-center overflow-y-auto bg-ink-950/80 p-4 backdrop-blur-md"
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.97, y: 10 }}
-        transition={{ type: "spring", stiffness: 260, damping: 26 }}
-        onClick={(e) => e.stopPropagation()}
-        className="relative my-8 w-full max-w-3xl overflow-hidden rounded-3xl border border-white/10 bg-ink-900"
-      >
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 z-20 grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-ink-950/60 text-slate-300 transition hover:text-white"
-          aria-label="Kapat"
-        >
-          <X size={16} />
-        </button>
+    <>
+      <motion.div style={{ scaleX: bar }} className="fixed left-0 top-0 z-[82] h-px w-full origin-left bg-ember" />
 
-        {hasImages ? (
-          <div className="relative aspect-video w-full bg-ink-950">
-            <AnimatePresence mode="wait">
-              <motion.img
-                key={slide}
-                src={project.images[slide]}
-                alt=""
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.35 }}
-                className="h-full w-full object-contain"
-              />
-            </AnimatePresence>
-            {project.images.length > 1 && (
-              <>
-                <button
-                  onClick={prev}
-                  className="absolute left-3 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/10 bg-ink-950/70 text-white transition hover:bg-ink-800"
-                  aria-label="Önceki"
-                >
-                  <ChevronLeft size={18} />
-                </button>
-                <button
-                  onClick={next}
-                  className="absolute right-3 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/10 bg-ink-950/70 text-white transition hover:bg-ink-800"
-                  aria-label="Sonraki"
-                >
-                  <ChevronRight size={18} />
-                </button>
-                <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
-                  {project.images.map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setSlide(i)}
-                      className={`h-1.5 rounded-full transition-all ${
-                        i === slide ? "w-6 bg-spark" : "w-1.5 bg-white/30"
-                      }`}
-                      aria-label={`Görsel ${i + 1}`}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        ) : (
-          <div className={`relative bg-gradient-to-br ${project.accent}`}>
-            <div className="flex items-center gap-2 border-b border-white/10 bg-ink-950/40 px-5 py-3">
-              <span className="h-3 w-3 rounded-full bg-white/20" />
-              <span className="h-3 w-3 rounded-full bg-white/20" />
-              <span className="h-3 w-3 rounded-full bg-white/20" />
-              <span className="ml-2 flex-1 truncate rounded-md bg-ink-950/50 px-3 py-1.5 font-mono text-xs text-slate-300">
-                {project.domain}
-              </span>
-            </div>
-            <div className="grid h-44 place-items-center dotgrid">
-              <span className="text-7xl drop-shadow-lg">{project.emoji}</span>
-            </div>
-          </div>
-        )}
+      <header className="fixed inset-x-0 top-0 z-[80] text-bone mix-blend-difference">
+        <div className="flex items-center justify-between px-5 py-5 sm:px-10">
+          <a href="#home" aria-label="Ana sayfa" className="group flex items-center gap-3">
+            <Logo className="h-9 w-9 transition-transform duration-700 ease-[cubic-bezier(.22,1,.36,1)] group-hover:rotate-[-25deg]" />
+            <span className="hidden font-mono text-[11px] uppercase leading-tight tracking-[0.2em] sm:block">
+              Özgür Kaan
+              <br />
+              Kaya
+            </span>
+          </a>
 
-        <div className="p-7">
-          <div className="mb-4 flex flex-wrap gap-2">
-            {project.tags.map((tag, i) => (
-              <span key={i} className="rounded-md bg-violet-500/10 px-2 py-1 font-mono text-[11px] text-violet-300">
-                {tag}
-              </span>
+          <nav className="hidden items-center gap-8 md:flex">
+            {navLinks.map((l, i) => (
+              <a key={l.id} href={`#${l.id}`} className="group flex items-start gap-1.5 text-sm">
+                <span className={`font-mono text-[9px] transition-colors ${active === l.id ? "text-bone" : "text-bone/50"}`}>
+                  0{i + 1}
+                </span>
+                <span className="relative">
+                  <RollText>{l.label}</RollText>
+                  <span
+                    className={`absolute -bottom-1 left-0 h-px bg-bone transition-all duration-500 ${
+                      active === l.id ? "w-full" : "w-0"
+                    }`}
+                  />
+                </span>
+              </a>
             ))}
-          </div>
-          <h3 className="font-display text-2xl font-bold text-white">{project.title}</h3>
-          {project.domain && (
-            <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2.5 py-1 font-mono text-[11px] text-slate-400">
-              {project.kind === "live" ? <Globe size={12} /> : <Lock size={12} />} {project.domain}
-            </div>
-          )}
-          <p className="mt-4 leading-relaxed text-slate-400">{project.fullDescription}</p>
+          </nav>
 
-          <div className="mt-6 flex flex-wrap gap-3">
-            {project.github && (
-              <a
-                href={project.github}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-2.5 text-sm font-semibold text-white transition hover:border-violet-400/60 hover:bg-white/5"
-              >
-                <Github size={16} /> Kaynak Kod
-              </a>
-            )}
-            {project.url && (
-              <a
-                href={project.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-full bg-spark px-5 py-2.5 text-sm font-bold text-ink-950 transition hover:bg-amber-300"
-              >
-                Siteyi Ziyaret Et <ExternalLink size={15} />
-              </a>
-            )}
-            {project.kind === "internal" && (
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 px-5 py-2.5 text-sm font-medium text-slate-400">
-                <Lock size={15} /> İç sistem · yetkiyle erişilir
-              </span>
-            )}
+          <div className="hidden items-center gap-6 md:flex">
+            <span className="font-mono text-[11px] uppercase tracking-[0.2em]">
+              İST <span className="tabular-nums">{time}</span>
+            </span>
+            <a href="#contact" className="group rounded-full border border-bone/40 px-5 py-2 text-sm transition-colors hover:bg-bone hover:text-ink-950">
+              <RollText>Konuşalım</RollText>
+            </a>
           </div>
+
+          <button
+            onClick={() => setOpen(true)}
+            className="font-mono text-[11px] uppercase tracking-[0.2em] md:hidden"
+            aria-label="Menüyü aç"
+          >
+            Menü
+          </button>
         </div>
-      </motion.div>
-    </motion.div>
+      </header>
+
+      {/* mobile overlay */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ clipPath: "inset(0% 0% 100% 0%)" }}
+            animate={{ clipPath: "inset(0% 0% 0% 0%)" }}
+            exit={{ clipPath: "inset(0% 0% 100% 0%)" }}
+            transition={{ duration: 0.8, ease: EASE_IN_OUT }}
+            className="fixed inset-0 z-[85] flex flex-col bg-ember px-5 py-5 text-ink-950 md:hidden"
+          >
+            <div className="flex items-center justify-between">
+              <Logo className="h-9 w-9" />
+              <button onClick={() => setOpen(false)} className="font-mono text-[11px] uppercase tracking-[0.2em]">
+                Kapat
+              </button>
+            </div>
+            <div className="mt-auto flex flex-col gap-1">
+              {navLinks.map((l, i) => (
+                <a key={l.id} href={`#${l.id}`} onClick={(e) => goMobile(e, l.id)} className="flex items-start gap-3">
+                  <span className="pt-3 font-mono text-[10px]">0{i + 1}</span>
+                  <span className="font-serif text-[15vw] leading-[0.95]">
+                    <MaskLine ready delay={0.25 + i * 0.07}>
+                      {l.label}
+                    </MaskLine>
+                  </span>
+                </a>
+              ))}
+            </div>
+            <div className="mt-10 flex justify-between border-t border-ink-950/20 pt-4 font-mono text-[11px] uppercase tracking-[0.2em]">
+              <span>İstanbul — {time}</span>
+              <span>©{YEAR}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 };
 
-const Projects = () => {
-  const [active, setActive] = useState(null);
+/* ------------------------------------------------------------------ */
+/*  Hero dot field — a grid of points pushed around by the cursor    */
+/* ------------------------------------------------------------------ */
+const DotField = () => {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const canvas = ref.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const reduce = prefersReducedMotion();
+    const GAP = 24;
+    const RADIUS = 150;
+    const mouse = { x: -9999, y: -9999 };
+    let dots = [];
+    let w = 0;
+    let h = 0;
+    let raf = 0;
+    let running = false;
+    let t = 0;
+
+    const build = () => {
+      const r = canvas.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = r.width;
+      h = r.height;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      dots = [];
+      for (let y = GAP / 2; y < h; y += GAP) {
+        for (let x = GAP / 2; x < w; x += GAP) dots.push({ ox: x, oy: y, x, y, vx: 0, vy: 0 });
+      }
+    };
+
+    const draw = () => {
+      t += 0.012;
+      ctx.clearRect(0, 0, w, h);
+      for (let i = 0; i < dots.length; i++) {
+        const d = dots[i];
+        const dx = d.x - mouse.x;
+        const dy = d.y - mouse.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        if (dist < RADIUS) {
+          const f = (1 - dist / RADIUS) * 2.4;
+          d.vx += (dx / dist) * f;
+          d.vy += (dy / dist) * f;
+        }
+        d.vx = (d.vx + (d.ox - d.x) * 0.055) * 0.8;
+        d.vy = (d.vy + (d.oy - d.y) * 0.055) * 0.8;
+        d.x += d.vx;
+        d.y += d.vy;
+
+        const disp = Math.min(Math.hypot(d.x - d.ox, d.y - d.oy) / 16, 1);
+        const wave = (Math.sin(d.ox * 0.011 + t * 2) + Math.cos(d.oy * 0.014 + t * 1.3)) * 0.25 + 0.5;
+        const a = 0.1 + wave * 0.16 + disp * 0.7;
+        ctx.fillStyle = disp > 0.12 ? `rgba(255,91,31,${a})` : `rgba(237,230,218,${a})`;
+        const s = 1.2 + disp * 1.8;
+        ctx.fillRect(d.x - s / 2, d.y - s / 2, s, s);
+      }
+      if (running) raf = requestAnimationFrame(draw);
+    };
+
+    const start = () => {
+      if (running || reduce) return;
+      running = true;
+      raf = requestAnimationFrame(draw);
+    };
+    const stop = () => {
+      running = false;
+      cancelAnimationFrame(raf);
+    };
+
+    const onMove = (e) => {
+      const r = canvas.getBoundingClientRect();
+      mouse.x = e.clientX - r.left;
+      mouse.y = e.clientY - r.top;
+    };
+    const onResize = () => {
+      build();
+      if (!running) draw();
+    };
+
+    build();
+    draw();
+    const io = new IntersectionObserver(([en]) => (en.isIntersecting ? start() : stop()));
+    io.observe(canvas);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("resize", onResize);
+    return () => {
+      stop();
+      io.disconnect();
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
+
   return (
-    <section id="projects" className="relative px-5 py-28">
-      <div className="mx-auto max-w-6xl">
-        <Heading index="03" kicker="Seçili işler" title="Projelerim" />
+    <canvas
+      ref={ref}
+      aria-hidden
+      className="absolute inset-0 h-full w-full"
+      style={{
+        WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 60% 40%, #000 30%, transparent 85%)",
+        maskImage: "radial-gradient(ellipse 80% 70% at 60% 40%, #000 30%, transparent 85%)",
+      }}
+    />
+  );
+};
 
-        {/* Featured — recent production systems */}
-        <Reveal className="mb-5 flex items-center gap-2 text-sm font-medium text-slate-400">
-          <Sparkles size={15} className="text-spark" /> Öne çıkan güncel çalışmalar
-        </Reveal>
-        <div className="grid gap-6 sm:grid-cols-2">
-          {featured.map((proj, index) => (
-            <FeaturedCard key={index} project={proj} index={index} onClick={() => setActive(proj)} />
-          ))}
+/* ------------------------------------------------------------------ */
+/*  Hero                                                              */
+/* ------------------------------------------------------------------ */
+const RoundBadge = () => (
+  <Magnetic href="#about" data-cursor="Kaydır" className="relative grid h-28 w-28 shrink-0 place-items-center sm:h-36 sm:w-36">
+    <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full animate-spin-slow" aria-hidden>
+      <defs>
+        <path id="badge-circle" d="M50,50 m-41,0 a41,41 0 1,1 82,0 a41,41 0 1,1 -82,0" />
+      </defs>
+      <text className="fill-bone font-mono text-[7.5px] uppercase">
+        <textPath href="#badge-circle" textLength="255" lengthAdjust="spacing">
+          Aşağı kaydır ✦ Keşfet ✦ Aşağı kaydır ✦ Keşfet ✦
+        </textPath>
+      </text>
+    </svg>
+    <span className="grid h-12 w-12 place-items-center rounded-full bg-ember text-ink-950 sm:h-14 sm:w-14">
+      <ArrowDown size={20} />
+    </span>
+  </Magnetic>
+);
+
+const Hero = ({ ready }) => {
+  const ref = useRef(null);
+  const [wi, setWi] = useState(0);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
+  const y = useTransform(scrollYProgress, [0, 1], ["0%", "28%"]);
+  const opacity = useTransform(scrollYProgress, [0, 0.85], [1, 0]);
+
+  useEffect(() => {
+    const t = setInterval(() => setWi((i) => (i + 1) % heroWords.length), 2400);
+    return () => clearInterval(t);
+  }, []);
+
+  const fade = (delay) => ({
+    initial: { opacity: 0, y: 16 },
+    animate: ready ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 },
+    transition: { duration: 1, delay, ease: EASE },
+  });
+
+  return (
+    <section id="home" ref={ref} className="relative flex min-h-[100svh] flex-col overflow-hidden px-5 pb-8 pt-24 sm:px-10">
+      <DotField />
+
+      <motion.div style={{ y, opacity }} className="relative z-10 flex flex-1 flex-col">
+        <motion.div {...fade(0.5)} className="grid grid-cols-2 gap-4 border-b hairline pb-4 md:grid-cols-12">
+          <Kicker className="whitespace-nowrap md:col-span-3">Portfolyo ©{YEAR}</Kicker>
+          <Kicker className="hidden md:col-span-5 md:block">Yazılım Geliştirme Uzmanı · Metro Holding</Kicker>
+          <span className="flex items-center justify-end gap-2 md:col-span-4">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ember opacity-70" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-ember" />
+            </span>
+            <Kicker className="whitespace-nowrap text-bone">Projelere açık</Kicker>
+          </span>
+        </motion.div>
+
+        <h1 className="mt-auto pt-12 font-serif text-[29vw] leading-[0.8] tracking-[-0.035em] md:pt-16 md:text-[clamp(4.2rem,17.5vw,19rem)]">
+          <span className="flex items-end justify-between gap-6">
+            <MaskLine ready={ready} delay={0.1}>
+              Özgür
+            </MaskLine>
+            <motion.span
+              {...fade(0.9)}
+              className="mb-[0.18em] hidden max-w-[16rem] text-right font-sans text-[clamp(0.95rem,1.25vw,1.15rem)] leading-snug tracking-normal text-bone-muted md:block"
+            >
+              Python ile{" "}
+              <span className="relative inline-flex h-[1.3em] overflow-hidden align-bottom">
+                <AnimatePresence mode="wait">
+                  <motion.span
+                    key={wi}
+                    initial={{ y: "100%" }}
+                    animate={{ y: 0 }}
+                    exit={{ y: "-100%" }}
+                    transition={{ duration: 0.55, ease: EASE }}
+                    className="block whitespace-nowrap font-serif text-[1.35em] italic leading-[1] text-ember"
+                  >
+                    {heroWords[wi]}
+                  </motion.span>
+                </AnimatePresence>
+              </span>
+              <br />
+              geliştiren bir yazılımcı.
+            </motion.span>
+          </span>
+          <span className="flex flex-col md:flex-row md:items-end md:justify-between md:gap-6">
+            <MaskLine ready={ready} delay={0.2} className="italic text-ember">
+              Kaan
+            </MaskLine>
+            <MaskLine ready={ready} delay={0.28} className="text-right md:text-left">
+              Kaya
+            </MaskLine>
+          </span>
+        </h1>
+
+        <div className="mt-10 grid items-end gap-8 md:grid-cols-12">
+          <motion.p {...fade(1)} className="max-w-md text-base leading-relaxed text-bone-muted md:col-span-5 md:text-lg">
+            Python tabanlı iç sistemler, React ile kurumsal web çözümleri ve uçtan uca otomasyonlar
+            geliştiriyorum. Kodla süreci hızlandırıp veriyi değere dönüştürüyorum.
+          </motion.p>
+          <motion.div {...fade(1.1)} className="flex items-center gap-6 md:col-span-4 md:col-start-6">
+            <Magnetic
+              href="#projects"
+              data-cursor="Bak"
+              className="group inline-flex items-center gap-3 rounded-full bg-bone px-7 py-4 text-sm font-medium text-ink-950"
+            >
+              <RollText>Seçili işler</RollText>
+              <ArrowUpRight size={16} className="transition-transform duration-500 group-hover:rotate-45" />
+            </Magnetic>
+            <a href="#contact" className="group text-sm text-bone">
+              <span className="link-draw pb-1">İletişime geç</span>
+            </a>
+          </motion.div>
+          <motion.div {...fade(1.2)} className="hidden justify-end md:col-span-3 md:flex">
+            <RoundBadge />
+          </motion.div>
         </div>
-
-        {/* Others */}
-        <Reveal className="mb-5 mt-16 flex items-center gap-2 text-sm font-medium text-slate-400">
-          <Database size={15} className="text-violet-400" /> Analiz & kişisel projeler
-        </Reveal>
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {others.map((proj, index) => (
-            <ImageCard key={index} project={proj} index={index} onClick={() => setActive(proj)} />
-          ))}
-        </div>
-      </div>
-
-      <AnimatePresence>
-        {active && <ProjectModal project={active} onClose={() => setActive(null)} />}
-      </AnimatePresence>
+      </motion.div>
     </section>
   );
 };
 
 /* ------------------------------------------------------------------ */
-/*  Contact — coffee-catch reveal game                                */
+/*  Velocity marquee — speeds up and skews with scroll velocity       */
 /* ------------------------------------------------------------------ */
-const contacts = [
-  { icon: Phone, label: "Telefon", value: "0544 811 55 31", href: "tel:05448115531" },
-  { icon: Mail, label: "E-posta", value: "kayaozgurkaan@gmail.com", href: "mailto:kayaozgurkaan@gmail.com" },
-  { icon: Linkedin, label: "LinkedIn", value: "Özgür Kaan Kaya", href: "https://www.linkedin.com/in/ozgurkaankaya/" },
-  { icon: Github, label: "GitHub", value: "@odoublek", href: "https://github.com/odoublek" },
-];
-
-/* --- Coffee data --- */
-const TEMPS = [
-  { id: "hot", label: "Sıcak Kahve", emoji: "🔥", grad: "from-amber-500/25 to-orange-600/10", ring: "hover:border-amber-400/60" },
-  { id: "cold", label: "Soğuk Kahve", emoji: "🧊", grad: "from-sky-500/25 to-cyan-600/10", ring: "hover:border-sky-400/60" },
-];
-
-const TEA = {
-  id: "tea",
-  label: "Çay",
-  emoji: "🍵",
-  fill: "from-red-950 via-orange-900 to-amber-500",
-  note: "Kahve içmiyorsan çayımız her zaman hazır — ince belli bardakta, tavşan kanı. Umarım bunu seversin.",
+const wrap = (min, max, v) => {
+  const r = max - min;
+  return ((((v - min) % r) + r) % r) + min;
 };
 
-const DRINKS = {
-  hot: [
-    { id: "espresso", label: "Espresso", emoji: "☕", note: "Sade, sert, oyalanmadan işine bakan. Sabahları ilk bunu içerim; lafı uzatmadan işe koyulmak gibi." },
-    { id: "turk", label: "Türk Kahvesi", emoji: "🫖", note: "Yanında bir bardak su, karşında iyi bir sohbet. Acele etmeye gelmez — sağlam iş çıkarmak gibi, bir fincanının kırk yıl hatırı var." },
-    { id: "latte", label: "Latte", emoji: "🥛", note: "Sütüyle yumuşamış, dengeli bir kahve. Sert espressoyu sevmeyenlerin limanı; güzel bir orta yol." },
-    { id: "cappuccino", label: "Cappuccino", emoji: "☕", note: "Köpüğü tam kıvamında olsun isteyenlerdensin. Detaya bu kadar takılıyorsan iyi anlaşacağız." },
-  ],
-  cold: [
-    { id: "ice-latte", label: "Buzlu Latte", emoji: "🥤", note: "Sıcağı sevip serinlemek isteyenlerin kahvesi. Yumuşak ve ferah — arada kalanların en doğru tercihi." },
-    { id: "cold-brew", label: "Cold Brew", emoji: "🧊", note: "Saatlerce soğukta, sabırla demlenir. En çok emek isteyen ama en yumuşak içilen kahve; beklemenin karşılığını fazlasıyla verir." },
-    { id: "frappe", label: "Frappe", emoji: "🥤", note: "Açıkçası pek tercih etmem ama değişik tatlara saygım sonsuz. Farklı bir bakış açısı her zaman iyi gelir." },
-    { id: "ice-americano", label: "Buzlu Americano", emoji: "🧋", note: "Serin ve sert — benim de en sevdiğim soğuk kahve. Anlaşılan ilk görüşmede ne içeceğimiz şimdiden belli oldu." },
-  ],
-};
+const VelocityMarquee = ({ items, baseVelocity = -2.2 }) => {
+  const reduce = useReducedMotion();
+  const baseX = useMotionValue(0);
+  const { scrollY } = useScroll();
+  const velocity = useVelocity(scrollY);
+  const smooth = useSpring(velocity, { damping: 50, stiffness: 400 });
+  const factor = useTransform(smooth, [0, 1000], [0, 4], { clamp: false });
+  const skew = useTransform(smooth, [-2500, 2500], [7, -7]);
+  const x = useTransform(baseX, (v) => `${wrap(-50, 0, v)}%`);
+  const dir = useRef(1);
 
-/* --- Tilt card (pseudo-3D on hover) --- */
-const TiltCard = ({ children, className = "", onClick }) => {
-  const rx = useMotionValue(0);
-  const ry = useMotionValue(0);
-  const srx = useSpring(rx, { stiffness: 200, damping: 15 });
-  const sry = useSpring(ry, { stiffness: 200, damping: 15 });
-  const onMove = (e) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    ry.set(((e.clientX - r.left) / r.width - 0.5) * 16);
-    rx.set(-((e.clientY - r.top) / r.height - 0.5) * 16);
-  };
-  const reset = () => {
-    rx.set(0);
-    ry.set(0);
-  };
+  useAnimationFrame((_, delta) => {
+    if (reduce) return;
+    let move = dir.current * baseVelocity * (delta / 1000);
+    if (factor.get() < 0) dir.current = -1;
+    else if (factor.get() > 0) dir.current = 1;
+    move += dir.current * move * factor.get();
+    baseX.set(baseX.get() + move);
+  });
+
   return (
-    <motion.button
-      onMouseMove={onMove}
-      onMouseLeave={reset}
-      onClick={onClick}
-      style={{ rotateX: srx, rotateY: sry, transformPerspective: 900 }}
-      whileTap={{ scale: 0.95 }}
-      className={className}
-    >
-      {children}
-    </motion.button>
+    <div className="relative overflow-hidden border-y hairline py-8 md:py-10">
+      <motion.div style={{ x, skewX: skew }} className="flex w-max whitespace-nowrap">
+        {[0, 1].map((copy) => (
+          <div key={copy} className="flex shrink-0 items-center" aria-hidden={copy === 1}>
+            {items.map((s, i) => (
+              <span key={i} className="flex items-center font-serif text-[clamp(2.75rem,7.5vw,7rem)] leading-none">
+                <span className={i % 2 ? "italic text-ember" : "text-bone"}>{s}</span>
+                <span className="mx-8 text-[0.4em] text-bone-dim md:mx-12">✦</span>
+              </span>
+            ))}
+          </div>
+        ))}
+      </motion.div>
+    </div>
   );
 };
 
-const STEP_LABELS = ["Sıcaklık", "Kahve", "Servis"];
+/* ------------------------------------------------------------------ */
+/*  About                                                             */
+/* ------------------------------------------------------------------ */
+const ScrollWord = ({ children, progress, range, accent }) => {
+  const opacity = useTransform(progress, range, [0.12, 1]);
+  return (
+    <span className="mr-[0.24em] inline-block">
+      <motion.span style={{ opacity }} className={accent ? "italic text-ember" : ""}>
+        {children}
+      </motion.span>
+    </span>
+  );
+};
 
-const ContactReveal = () => {
+const ScrollWords = ({ text, className = "" }) => {
+  const ref = useRef(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start 0.85", "end 0.5"] });
+  const words = text.split(" ");
+  return (
+    <p ref={ref} className={className}>
+      {words.map((w, i) => {
+        const accent = w.startsWith("*");
+        return (
+          <ScrollWord
+            key={i}
+            progress={scrollYProgress}
+            range={[i / words.length, (i + 1) / words.length]}
+            accent={accent}
+          >
+            {accent ? w.replace(/\*/g, "") : w}
+          </ScrollWord>
+        );
+      })}
+    </p>
+  );
+};
+
+const CountUp = ({ to, suffix }) => {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: "-60px" });
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    if (!inView) return;
+    const c = animate(0, to, { duration: 1.8, ease: EASE, onUpdate: (x) => setV(Math.round(x)) });
+    return () => c.stop();
+  }, [inView, to]);
+  return (
+    <span ref={ref} className="tabular-nums">
+      {v}
+      <span className="text-ember">{suffix}</span>
+    </span>
+  );
+};
+
+const About = () => (
+  <section id="about" className="relative px-5 py-28 sm:px-10 md:py-40">
+    <SectionHead index="01" label="Hakkımda" title="Kısaca" italic="ben." />
+
+    <ScrollWords
+      text={manifesto}
+      className="max-w-[24ch] font-serif text-[clamp(2.1rem,5vw,5rem)] leading-[1.02] tracking-[-0.01em] md:ml-[25%]"
+    />
+
+    <div className="mt-24 grid gap-16 md:mt-40 md:grid-cols-12">
+      <div className="grid grid-cols-3 gap-4 md:col-span-3 md:grid-cols-1 md:gap-10">
+        {stats.map((s, i) => (
+          <Reveal key={s.label} delay={i * 0.08} className="border-t hairline pt-4">
+            <div className="font-serif text-[clamp(3rem,7vw,6.5rem)] leading-none">
+              <CountUp to={s.n} suffix={s.suffix} />
+            </div>
+            <Kicker className="mt-3 block">{s.label}</Kicker>
+          </Reveal>
+        ))}
+      </div>
+
+      <div className="md:col-span-8 md:col-start-5">
+        <Reveal>
+          <p className="max-w-2xl text-lg leading-relaxed text-bone-muted md:text-xl">{aboutText}</p>
+        </Reveal>
+
+        <div className="mt-16 grid gap-12 sm:grid-cols-2">
+          {skillGroups.map((g, gi) => (
+            <Reveal key={g.title} delay={gi * 0.08}>
+              <Kicker>({g.title})</Kicker>
+              <ul className="mt-5 border-t hairline">
+                {g.items.map((item) => (
+                  <li
+                    key={item}
+                    className="group flex items-center justify-between border-b hairline py-3 font-serif text-2xl transition-colors duration-300 hover:text-ember md:text-[1.7rem]"
+                  >
+                    <span className="transition-transform duration-500 ease-[cubic-bezier(.22,1,.36,1)] group-hover:translate-x-2">
+                      {item}
+                    </span>
+                    <span className="text-sm text-bone-dim opacity-0 transition-opacity group-hover:opacity-100">✦</span>
+                  </li>
+                ))}
+              </ul>
+            </Reveal>
+          ))}
+        </div>
+
+        <div className="mt-16 grid gap-12 sm:grid-cols-2">
+          <Reveal>
+            <Kicker>(Eğitim)</Kicker>
+            <ul className="mt-5 space-y-6 border-t hairline pt-5">
+              {education.map((e) => (
+                <li key={e.school}>
+                  <span className="font-mono text-[11px] text-ember">{e.years}</span>
+                  <div className="mt-1 text-lg text-bone">{e.degree}</div>
+                  <div className="text-sm text-bone-muted">{e.school}</div>
+                </li>
+              ))}
+            </ul>
+          </Reveal>
+          <Reveal delay={0.08}>
+            <Kicker>(Diller)</Kicker>
+            <ul className="mt-5 space-y-3 border-t hairline pt-5">
+              {languages.map((l) => (
+                <li key={l} className="text-lg text-bone">
+                  {l}
+                </li>
+              ))}
+            </ul>
+          </Reveal>
+        </div>
+      </div>
+    </div>
+  </section>
+);
+
+/* ------------------------------------------------------------------ */
+/*  Experience — editorial accordion index                           */
+/* ------------------------------------------------------------------ */
+const ExperienceRow = ({ exp, index, open, onToggle }) => (
+  <div className="border-b hairline">
+    <button
+      onClick={onToggle}
+      aria-expanded={open}
+      data-cursor={open ? "Kapat" : "Aç"}
+      className="group relative grid w-full grid-cols-12 items-baseline gap-x-4 gap-y-2 overflow-hidden py-7 text-left md:py-9"
+    >
+      <span className="absolute inset-0 origin-bottom scale-y-0 bg-bone transition-transform duration-500 ease-[cubic-bezier(.22,1,.36,1)] md:group-hover:scale-y-100" />
+      <span className="relative col-span-2 font-mono text-[11px] text-bone-muted transition-colors duration-500 md:col-span-1 md:group-hover:text-ink-950">
+        0{index + 1}
+      </span>
+      <span className="relative col-span-9 font-serif text-[clamp(1.75rem,3.6vw,3.25rem)] leading-[1.02] transition-[color,transform] duration-500 ease-[cubic-bezier(.22,1,.36,1)] md:col-span-6 md:group-hover:translate-x-3 md:group-hover:text-ink-950">
+        {exp.role}
+        {exp.current && (
+          <span className="ml-3 inline-flex translate-y-[-0.4em] items-center gap-1.5 rounded-full bg-ember px-2.5 py-1 align-middle font-mono text-[9px] uppercase tracking-[0.15em] text-ink-950">
+            Halen
+          </span>
+        )}
+      </span>
+      <span className="relative col-span-12 col-start-3 text-sm text-bone-muted transition-colors duration-500 md:col-span-3 md:col-start-auto md:group-hover:text-ink-950">
+        {exp.company}
+      </span>
+      <span className="relative col-span-12 col-start-3 flex items-center justify-between gap-3 font-mono text-[11px] uppercase tracking-[0.12em] text-bone-muted transition-colors duration-500 md:col-span-2 md:col-start-auto md:group-hover:text-ink-950">
+        {exp.date}
+        <Plus
+          size={18}
+          className={`shrink-0 transition-transform duration-500 ${open ? "rotate-45 text-ember" : ""}`}
+        />
+      </span>
+    </button>
+
+    <AnimatePresence initial={false}>
+      {open && (
+        <motion.div
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: "auto", opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: 0.6, ease: EASE }}
+          className="overflow-hidden"
+        >
+          <div className="grid grid-cols-12 gap-4 pb-10">
+            <ul className="col-span-12 space-y-3 md:col-span-6 md:col-start-2">
+              {exp.description.map((d, i) => (
+                <li key={i} className="flex gap-4 text-base leading-relaxed text-bone-muted md:text-lg">
+                  <span className="mt-[0.7em] h-px w-5 shrink-0 bg-ember" />
+                  {d}
+                </li>
+              ))}
+            </ul>
+            <div className="col-span-12 md:col-span-3 md:col-start-9">
+              <Kicker>Konum</Kicker>
+              <div className="mt-1 text-bone">{exp.location}</div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  </div>
+);
+
+const Experience = () => {
+  const [open, setOpen] = useState(0);
+  return (
+    <section id="experience" className="relative px-5 py-28 sm:px-10 md:py-40">
+      <SectionHead index="02" label="Deneyim" title="İş" italic="deneyimi." />
+      <Reveal className="border-t hairline">
+        {experiences.map((exp, i) => (
+          <ExperienceRow key={exp.role} exp={exp} index={i} open={open === i} onToggle={() => setOpen(open === i ? -1 : i)} />
+        ))}
+      </Reveal>
+    </section>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/*  Projects — sticky horizontal showcase                             */
+/* ------------------------------------------------------------------ */
+const ShowcasePanel = ({ project, index, total, onOpen, className = "", style }) => (
+  <article
+    onClick={onOpen}
+    data-cursor="İncele"
+    className={`group relative shrink-0 cursor-pointer ${className}`}
+    style={style}
+  >
+    <div className="mb-4 flex items-baseline justify-between gap-4">
+      <Kicker className="truncate">
+        ({String(index + 1).padStart(2, "0")}/{String(total).padStart(2, "0")})
+        <span className="ml-4 hidden normal-case tracking-normal text-bone-dim sm:inline">{project.domain}</span>
+      </Kicker>
+      <Kicker className={project.kind === "live" ? "text-ember" : ""}>
+        {project.kind === "live" ? "● Canlı site" : "İç sistem"}
+      </Kicker>
+    </div>
+
+    <div className="relative aspect-[16/10] overflow-hidden rounded-md bg-ink-800">
+      <img
+        src={project.images[0]}
+        alt={project.title}
+        loading="lazy"
+        className="h-full w-full scale-[1.02] object-cover object-top transition-transform duration-[1.6s] ease-[cubic-bezier(.22,1,.36,1)] group-hover:scale-[1.08]"
+      />
+      <div className="absolute inset-0 bg-ink-950/0 transition-colors duration-700 group-hover:bg-ink-950/20" />
+    </div>
+
+    <div className="mt-6 grid gap-4 md:grid-cols-12">
+      <h3 className="font-serif text-[clamp(2rem,3.4vw,3.4rem)] leading-[0.95] transition-colors duration-500 group-hover:text-ember md:col-span-7">
+        {project.title}
+      </h3>
+      <div className="md:col-span-5">
+        <p className="text-sm leading-relaxed text-bone-muted">{project.description}</p>
+        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">
+          {project.tags.map((t) => (
+            <span key={t} className="font-mono text-[10px] uppercase tracking-[0.15em] text-bone-dim">
+              {t}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  </article>
+);
+
+const HorizontalShowcase = ({ items, onOpen }) => {
+  const target = useRef(null);
+  const track = useRef(null);
+  const [distance, setDistance] = useState(0);
+  const dist = useMotionValue(0);
+  const { scrollYProgress } = useScroll({ target, offset: ["start start", "end end"] });
+  const x = useTransform(() => -scrollYProgress.get() * dist.get());
+  const bar = useSpring(scrollYProgress, { stiffness: 120, damping: 30 });
+  const [current, setCurrent] = useState(1);
+
+  useEffect(() => {
+    const measure = () => {
+      const d = Math.max(0, track.current.scrollWidth - window.innerWidth);
+      dist.set(d);
+      setDistance(d);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(track.current);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [dist]);
+
+  useEffect(
+    () =>
+      scrollYProgress.on("change", (v) =>
+        setCurrent(Math.min(items.length, Math.max(1, Math.round(v * (items.length - 1)) + 1)))
+      ),
+    [scrollYProgress, items.length]
+  );
+
+  return (
+    <div ref={target} className="relative" style={{ height: `calc(100vh + ${distance}px)` }}>
+      <div className="sticky top-0 flex h-screen flex-col justify-center overflow-hidden">
+        <motion.div ref={track} style={{ x }} className="flex w-max items-center gap-[5vw] pl-10 pr-[8vw]">
+          <div className="flex w-[26vw] shrink-0 flex-col justify-between self-stretch py-4">
+            <Kicker>Öne çıkan · güncel</Kicker>
+            <div>
+              <p className="font-serif text-[clamp(2.25rem,3.6vw,3.75rem)] leading-[1]">
+                Şu an <span className="italic text-ember">aktif</span> kullanılan, sahada çalışan sistemler.
+              </p>
+              <div className="mt-8 flex items-center gap-3">
+                <span className="h-px w-12 bg-bone/40" />
+                <Kicker className="text-bone">Kaydırmaya devam et</Kicker>
+              </div>
+            </div>
+          </div>
+          {items.map((p, i) => (
+            <ShowcasePanel
+              key={p.title}
+              project={p}
+              index={i}
+              total={items.length}
+              onOpen={() => onOpen(p)}
+              style={{ width: "min(58vw, 92vh)" }}
+            />
+          ))}
+        </motion.div>
+
+        <div className="absolute inset-x-10 bottom-8 flex items-center gap-6">
+          <span className="font-mono text-[11px] tabular-nums text-bone">
+            {String(current).padStart(2, "0")}
+          </span>
+          <div className="h-px flex-1 bg-bone/10">
+            <motion.div style={{ scaleX: bar }} className="h-px origin-left bg-ember" />
+          </div>
+          <span className="font-mono text-[11px] tabular-nums text-bone-muted">
+            {String(items.length).padStart(2, "0")}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const StackedShowcase = ({ items, onOpen }) => (
+  <div className="space-y-20 px-5 sm:px-10">
+    {items.map((p, i) => (
+      <Reveal key={p.title}>
+        <ShowcasePanel project={p} index={i} total={items.length} onOpen={() => onOpen(p)} className="w-full" />
+      </Reveal>
+    ))}
+  </div>
+);
+
+/* --- Archive list with a cursor-following preview --- */
+const Archive = ({ items, onOpen }) => {
+  const [hover, setHover] = useState(null);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const sx = useSpring(x, { stiffness: 220, damping: 26, mass: 0.6 });
+  const sy = useSpring(y, { stiffness: 220, damping: 26, mass: 0.6 });
+
+  return (
+    <div
+      onMouseMove={(e) => {
+        x.set(e.clientX);
+        y.set(e.clientY);
+      }}
+      onMouseLeave={() => setHover(null)}
+      className="relative border-t hairline"
+    >
+      {items.map((p, i) => (
+        <button
+          key={p.title}
+          onClick={() => onOpen(p)}
+          onMouseEnter={() => setHover(i)}
+          data-cursor="Aç"
+          className={`group grid w-full grid-cols-12 items-center gap-4 border-b hairline py-6 text-left transition-opacity duration-500 md:py-8 ${
+            hover !== null && hover !== i ? "md:opacity-30" : ""
+          }`}
+        >
+          <span className="col-span-1 hidden font-mono text-[11px] text-bone-muted md:block">0{i + 1}</span>
+          <img src={p.thumbnail} alt="" loading="lazy" className="col-span-3 aspect-[4/3] w-full rounded-sm object-cover md:hidden" />
+          <span className="col-span-9 font-serif text-[clamp(1.6rem,3.4vw,3.25rem)] leading-[1] transition-transform duration-500 ease-[cubic-bezier(.22,1,.36,1)] group-hover:translate-x-3 md:col-span-6">
+            {p.title}
+          </span>
+          <span className="col-span-3 hidden font-mono text-[10px] uppercase tracking-[0.15em] text-bone-muted md:block">
+            {p.tags.slice(0, 3).join(" · ")}
+          </span>
+          <span className="col-span-2 hidden items-center justify-end gap-3 font-mono text-[11px] text-bone-muted md:flex">
+            {p.year}
+            <ArrowUpRight size={16} className="text-bone transition-transform duration-500 group-hover:rotate-45 group-hover:text-ember" />
+          </span>
+        </button>
+      ))}
+
+      <motion.div style={{ x: sx, y: sy }} className="pointer-events-none fixed left-0 top-0 z-[70] hidden md:block">
+        <AnimatePresence>
+          {hover !== null && (
+            <motion.div
+              key="preview"
+              initial={{ opacity: 0, scale: 0.7, rotate: -6 }}
+              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+              exit={{ opacity: 0, scale: 0.7, rotate: 6 }}
+              transition={{ duration: 0.45, ease: EASE }}
+              className="-translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-md border hairline bg-ink-800 shadow-2xl shadow-black/60"
+              style={{ width: 340, height: 240 }}
+            >
+              <AnimatePresence initial={false}>
+                <motion.img
+                  key={hover}
+                  src={items[hover].thumbnail}
+                  alt=""
+                  initial={{ y: "100%" }}
+                  animate={{ y: "0%" }}
+                  exit={{ y: "-100%" }}
+                  transition={{ duration: 0.55, ease: EASE }}
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </div>
+  );
+};
+
+/* --- Project sheet (modal) --- */
+const ProjectSheet = ({ project, onClose }) => {
+  const [slide, setSlide] = useState(0);
+  const count = project.images.length;
+  useScrollLock(true);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowRight") setSlide((s) => (s + 1) % count);
+      if (e.key === "ArrowLeft") setSlide((s) => (s - 1 + count) % count);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose, count]);
+
+  // portalled so it sits above the fixed header, outside main's stacking context
+  return createPortal(
+    <>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.5 }}
+        onClick={onClose}
+        data-cursor="Kapat"
+        className="fixed inset-0 z-[95] bg-ink-950/70 backdrop-blur-sm"
+      />
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-label={project.title}
+        initial={{ y: "100%" }}
+        animate={{ y: "0%" }}
+        exit={{ y: "100%" }}
+        transition={{ duration: 0.9, ease: EASE_IN_OUT }}
+        data-lenis-prevent
+        className="fixed inset-x-0 bottom-0 top-[5vh] z-[96] overflow-y-auto overscroll-contain rounded-t-[20px] bg-bone text-ink-950"
+      >
+        <div className="sticky top-0 z-10 flex items-center justify-between bg-bone/90 px-5 py-4 backdrop-blur sm:px-10">
+          <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-ink-950/60">
+            (Proje) — {project.kind === "live" ? "Canlı site" : project.kind === "internal" ? "İç sistem" : project.year}
+          </span>
+          <button onClick={onClose} className="group flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em]">
+            <RollText>Kapat</RollText>
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-ink-950 text-bone transition-transform duration-500 group-hover:rotate-90">
+              <Plus size={16} className="rotate-45" />
+            </span>
+          </button>
+        </div>
+
+        <div className="px-5 pb-16 sm:px-10">
+          <h3 className="max-w-5xl pt-6 font-serif text-[clamp(2.75rem,7vw,6.5rem)] leading-[0.92] tracking-[-0.02em]">
+            <MaskLine ready delay={0.35}>
+              {project.title}
+            </MaskLine>
+          </h3>
+
+          {/* gallery */}
+          <div className="relative mt-10 overflow-hidden rounded-md bg-ink-950">
+            <div className="relative aspect-[16/9] w-full">
+              <AnimatePresence initial={false} mode="popLayout">
+                <motion.img
+                  key={slide}
+                  src={project.images[slide]}
+                  alt={`${project.title} — görsel ${slide + 1}`}
+                  initial={{ opacity: 0, scale: 1.04 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.7, ease: EASE }}
+                  className="absolute inset-0 h-full w-full object-contain"
+                />
+              </AnimatePresence>
+            </div>
+            {count > 1 && (
+              <div className="absolute bottom-4 right-4 flex items-center gap-2">
+                <span className="mr-2 font-mono text-[11px] tabular-nums text-bone">
+                  {slide + 1}/{count}
+                </span>
+                <button
+                  onClick={() => setSlide((s) => (s - 1 + count) % count)}
+                  aria-label="Önceki görsel"
+                  className="grid h-10 w-10 place-items-center rounded-full bg-bone text-ink-950 transition hover:bg-ember"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <button
+                  onClick={() => setSlide((s) => (s + 1) % count)}
+                  aria-label="Sonraki görsel"
+                  className="grid h-10 w-10 place-items-center rounded-full bg-bone text-ink-950 transition hover:bg-ember"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+            )}
+          </div>
+          {count > 1 && (
+            <div className="mt-3 flex gap-3">
+              {project.images.map((src, i) => (
+                <button
+                  key={src}
+                  onClick={() => setSlide(i)}
+                  aria-label={`Görsel ${i + 1}`}
+                  className={`h-14 w-20 overflow-hidden rounded-sm border-2 transition sm:h-16 sm:w-24 ${
+                    i === slide ? "border-ember" : "border-transparent opacity-50 hover:opacity-100"
+                  }`}
+                >
+                  <img src={src} alt="" className="h-full w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-14 grid gap-10 border-t border-ink-950/15 pt-8 md:grid-cols-12">
+            <div className="space-y-6 md:col-span-4">
+              {project.domain && (
+                <div>
+                  <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-ink-950/50">Adres</span>
+                  <div className="mt-1 font-mono text-sm">{project.domain}</div>
+                </div>
+              )}
+              <div>
+                <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-ink-950/50">Teknolojiler</span>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {project.tags.map((t) => (
+                    <span key={t} className="rounded-full border border-ink-950/20 px-3 py-1 text-xs">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="md:col-span-7 md:col-start-6">
+              <p className="text-lg leading-relaxed text-ink-950/80 md:text-xl">{project.fullDescription}</p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                {project.url && (
+                  <a
+                    href={project.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group inline-flex items-center gap-2 rounded-full bg-ink-950 px-6 py-3 text-sm text-bone transition-colors hover:bg-ember hover:text-ink-950"
+                  >
+                    <RollText>Siteyi ziyaret et</RollText>
+                    <ArrowUpRight size={16} />
+                  </a>
+                )}
+                {project.github && (
+                  <a
+                    href={project.github}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group inline-flex items-center gap-2 rounded-full border border-ink-950/25 px-6 py-3 text-sm transition-colors hover:border-ink-950 hover:bg-ink-950 hover:text-bone"
+                  >
+                    <Github size={16} />
+                    <RollText>Kaynak kod</RollText>
+                  </a>
+                )}
+                {project.kind === "internal" && (
+                  <span className="inline-flex items-center gap-2 rounded-full border border-ink-950/15 px-6 py-3 text-sm text-ink-950/60">
+                    İç sistem · yetkiyle erişilir
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </>,
+    document.body
+  );
+};
+
+const Projects = () => {
+  const [active, setActive] = useState(null);
+  const wide = useMedia("(min-width: 768px)");
+  const close = useCallback(() => setActive(null), []);
+
+  return (
+    <section id="projects" className="relative py-28 md:py-40">
+      <div className="px-5 sm:px-10">
+        <SectionHead index="03" label="Projeler" title="Seçili" italic="işler." />
+      </div>
+
+      {wide ? <HorizontalShowcase items={featured} onOpen={setActive} /> : <StackedShowcase items={featured} onOpen={setActive} />}
+
+      <div className="px-5 pt-28 sm:px-10 md:pt-40">
+        <div className="mb-10 flex items-end justify-between gap-6">
+          <h3 className="font-serif text-[clamp(2.5rem,6vw,5.5rem)] leading-none">
+            <MaskLine>
+              Arşiv<span className="text-ember">.</span>
+            </MaskLine>
+          </h3>
+          <Kicker className="pb-2 text-right">Analiz & kişisel projeler</Kicker>
+        </div>
+        <Archive items={archive} onOpen={setActive} />
+      </div>
+
+      <AnimatePresence>{active && <ProjectSheet key={active.title} project={active} onClose={close} />}</AnimatePresence>
+    </section>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/*  Contact — coffee order unlocks the details                       */
+/* ------------------------------------------------------------------ */
+const STEP_LABELS = ["Sıcaklık", "Kahve", "Servis"];
+const COFFEE_FILL = {
+  hot: ["#1c0f08", "#4a2614", "#8a5a36"],
+  cold: ["#3a220f", "#7a4a26", "#c09065"],
+};
+
+const Cup = ({ temp, drink }) => {
+  const isCold = temp?.id === "cold";
+  const fill = drink?.fill || COFFEE_FILL[isCold ? "cold" : "hot"];
+  return (
+    <div className="flex flex-col items-center">
+      <div className="relative">
+        {!isCold && (
+          <div className="pointer-events-none absolute -top-10 left-1/2 flex -translate-x-1/2 gap-2.5">
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                className="h-10 w-[3px] animate-steam rounded-full bg-bone/50 blur-[2px]"
+                style={{ animationDelay: `${0.8 + i * 0.45}s` }}
+              />
+            ))}
+          </div>
+        )}
+        <span className="absolute -right-5 top-4 h-10 w-7 rounded-r-2xl border-[3px] border-l-0 border-bone/40" />
+        <div className="relative h-32 w-36 overflow-hidden rounded-b-[2.6rem] rounded-t-sm border-[3px] border-bone/40">
+          <motion.div
+            initial={{ height: "0%" }}
+            animate={{ height: "86%" }}
+            transition={{ duration: 1.9, ease: "easeInOut" }}
+            className="absolute inset-x-0 bottom-0"
+            style={{ background: `linear-gradient(to top, ${fill[0]}, ${fill[1]}, ${fill[2]})` }}
+          >
+            <div className="h-[3px] w-full bg-[#e9d3b4]/70" />
+          </motion.div>
+          {isCold &&
+            [0, 1, 2].map((i) => (
+              <motion.span
+                key={i}
+                initial={{ y: -60, opacity: 0, rotate: 0 }}
+                animate={{ y: 0, opacity: 1, rotate: 12 + i * 14 }}
+                transition={{ delay: 0.7 + i * 0.22, type: "spring", stiffness: 260, damping: 14 }}
+                className="absolute h-5 w-5 rounded-[3px] border border-bone/60 bg-bone/20 backdrop-blur-sm"
+                style={{ left: `${20 + i * 24}%`, bottom: `${30 + (i % 2) * 18}%` }}
+              />
+            ))}
+        </div>
+      </div>
+      <div className="mt-2 h-2 w-48 rounded-full bg-bone/10" />
+    </div>
+  );
+};
+
+const CoffeeOrder = ({ onServed }) => {
   const [step, setStep] = useState("temp"); // temp | type | brewing | done
   const [temp, setTemp] = useState(null);
   const [drink, setDrink] = useState(null);
-  const timerRef = useRef(null);
+  const timer = useRef(null);
 
-  useEffect(() => () => clearTimeout(timerRef.current), []);
+  useEffect(() => () => clearTimeout(timer.current), []);
 
-  const chooseTemp = (t) => {
-    setTemp(t);
-    setStep("type");
-  };
-  const chooseDrink = (d) => {
+  const brew = (d) => {
+    clearTimeout(timer.current);
     setDrink(d);
     setStep("brewing");
-    timerRef.current = setTimeout(() => setStep("done"), 2200);
-  };
-  const serveTea = () => {
-    clearTimeout(timerRef.current);
-    setDrink(TEA);
-    setStep("brewing");
-    timerRef.current = setTimeout(() => setStep("done"), 2200);
+    timer.current = setTimeout(() => {
+      setStep("done");
+      onServed();
+    }, 2300);
   };
   const restart = () => {
     setTemp(null);
@@ -1211,324 +1470,377 @@ const ContactReveal = () => {
 
   const stepIdx = step === "temp" ? 0 : step === "type" ? 1 : 2;
   const done = step === "done";
-  const isCold = temp?.id === "cold";
 
-  // one-time confetti burst positions
-  const confetti = useMemo(
+  const sparks = useMemo(
     () =>
-      Array.from({ length: 18 }).map((_, i) => ({
-        x: (Math.random() * 2 - 1) * 280,
-        y: -(Math.random() * 180 + 70),
-        rot: Math.random() * 360,
-        delay: Math.random() * 0.25,
-        e: ["☕", "✨", "🎉", "🤎", "🔥", "🧊"][i % 6],
+      Array.from({ length: 22 }).map(() => ({
+        x: (Math.random() * 2 - 1) * 260,
+        y: -(Math.random() * 200 + 60),
+        r: Math.random() * 360,
+        d: Math.random() * 0.25,
+        s: 4 + Math.random() * 6,
       })),
     []
   );
 
+  const swap = {
+    initial: { opacity: 0, y: 18 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -18 },
+    transition: { duration: 0.45, ease: EASE },
+  };
+
   return (
-    <div className="mt-10">
-      {/* Step indicator */}
-      <div className="mb-8 flex items-center justify-center gap-2 font-mono text-[11px]">
-        {STEP_LABELS.map((l, i) => (
-          <React.Fragment key={l}>
-            <span className={`flex items-center gap-1.5 ${i <= stepIdx ? "text-spark" : "text-slate-600"}`}>
-              <span
-                className={`grid h-5 w-5 place-items-center rounded-full border ${
-                  i <= stepIdx ? "border-spark/50 bg-spark/10" : "border-white/10"
-                }`}
-              >
-                {i + 1}
-              </span>
-              {l}
+    <div className="relative flex min-h-[460px] flex-col rounded-[18px] border hairline bg-ink-900/70 p-6 backdrop-blur-sm sm:p-10">
+      <div className="mb-10 flex flex-wrap items-center justify-between gap-4">
+        <Kicker>Sipariş · ÖKK-{YEAR}</Kicker>
+        <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.15em]">
+          {STEP_LABELS.map((l, i) => (
+            <span key={l} className={`flex items-center gap-2 ${i <= stepIdx ? "text-ember" : "text-bone-dim"}`}>
+              0{i + 1} {l}
+              {i < STEP_LABELS.length - 1 && <span className="h-px w-4 bg-bone/15" />}
             </span>
-            {i < STEP_LABELS.length - 1 && <span className="h-px w-6 bg-white/10" />}
-          </React.Fragment>
-        ))}
+          ))}
+        </div>
       </div>
 
-      <AnimatePresence mode="wait">
-        {/* STEP 1 — temperature */}
-        {step === "temp" && (
-          <motion.div
-            key="temp"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
-            transition={{ duration: 0.35 }}
-          >
-            <p className="mb-6 text-center font-display text-lg font-semibold text-white">
-              Bana bir kahve ısmarla — nasıl seversin?
-            </p>
-            <div className="mx-auto grid max-w-md grid-cols-2 gap-4">
-              {TEMPS.map((t) => (
-                <TiltCard
-                  key={t.id}
-                  onClick={() => chooseTemp(t)}
-                  className={`group rounded-2xl border border-white/10 bg-gradient-to-br ${t.grad} ${t.ring} p-6 text-center transition`}
-                >
-                  <div className="mb-2 text-5xl transition-transform duration-300 group-hover:scale-110">{t.emoji}</div>
-                  <div className="font-display text-lg font-bold text-white">{t.label}</div>
-                </TiltCard>
-              ))}
-            </div>
-            <div className="mt-6 text-center">
-              <button
-                onClick={serveTea}
-                className="font-mono text-xs text-slate-500 underline-offset-4 transition hover:text-slate-300 hover:underline"
-              >
-                kahve sevmiyorum →
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* STEP 2 — drink type */}
-        {step === "type" && (
-          <motion.div
-            key="type"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
-            transition={{ duration: 0.35 }}
-          >
-            <p className="mb-6 text-center font-display text-lg font-semibold text-white">
-              {isCold ? "Soğuk" : "Sıcak"} tarafı seçtin. Hangisi senin kahven?
-            </p>
-            <div className="mx-auto grid max-w-lg grid-cols-2 gap-3 sm:grid-cols-4">
-              {DRINKS[temp.id].map((d, i) => (
-                <motion.button
-                  key={d.id}
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.06 }}
-                  whileHover={{ y: -4, scale: 1.03 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => chooseDrink(d)}
-                  className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-center transition hover:border-spark/50 hover:bg-white/[0.06]"
-                >
-                  <div className="mb-1.5 text-3xl">{d.emoji}</div>
-                  <div className="text-xs font-semibold text-white">{d.label}</div>
-                </motion.button>
-              ))}
-            </div>
-            <div className="mt-6 text-center">
-              <button
-                onClick={() => setStep("temp")}
-                className="font-mono text-xs text-slate-500 underline-offset-4 transition hover:text-slate-300 hover:underline"
-              >
-                ← geri
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* STEP 3 — brewing + done share the cup */}
-        {(step === "brewing" || step === "done") && (
-          <motion.div
-            key="cup"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.35 }}
-            className="relative flex flex-col items-center"
-          >
-            {/* confetti on done */}
-            {done && (
-              <div className="pointer-events-none absolute inset-x-0 top-10 z-20 flex justify-center">
-                {confetti.map((c, i) => (
-                  <motion.span
-                    key={i}
-                    initial={{ opacity: 0, x: 0, y: 0, rotate: 0 }}
-                    animate={{ opacity: [0, 1, 1, 0], x: c.x, y: c.y, rotate: c.rot }}
-                    transition={{ duration: 1.4, delay: c.delay, ease: "easeOut" }}
-                    className="absolute text-xl"
+      <div className="flex flex-1 flex-col">
+        <AnimatePresence mode="wait">
+          {step === "temp" && (
+            <motion.div key="temp" {...swap} className="flex flex-1 flex-col">
+              <p className="font-serif text-[clamp(2rem,3.4vw,3rem)] leading-none">
+                Nasıl <span className="italic text-ember">seversin?</span>
+              </p>
+              <div className="mt-8 grid flex-1 grid-cols-2 gap-3">
+                {TEMPS.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      setTemp(t);
+                      setStep("type");
+                    }}
+                    className="group relative flex min-h-[180px] flex-col justify-between overflow-hidden rounded-xl border hairline p-5 text-left"
                   >
-                    {c.e}
-                  </motion.span>
+                    <span className="absolute inset-0 translate-y-full bg-ember transition-transform duration-500 ease-[cubic-bezier(.22,1,.36,1)] group-hover:translate-y-0" />
+                    <span className="relative font-serif text-5xl leading-none transition-colors duration-500 group-hover:text-ink-950">
+                      {t.glyph}
+                    </span>
+                    <span className="relative">
+                      <span className="block font-serif text-4xl transition-colors duration-500 group-hover:text-ink-950">
+                        {t.label}
+                      </span>
+                      <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-bone-muted transition-colors duration-500 group-hover:text-ink-950/70">
+                        {t.sub}
+                      </span>
+                    </span>
+                  </button>
                 ))}
               </div>
-            )}
+              <button
+                onClick={() => brew(TEA)}
+                className="mt-6 self-start font-mono text-[11px] uppercase tracking-[0.15em] text-bone-muted transition-colors hover:text-bone"
+              >
+                <span className="link-draw pb-0.5">Kahve sevmiyorum → çay olsun</span>
+              </button>
+            </motion.div>
+          )}
 
-            {/* Cup */}
-            <div className="mb-5 flex flex-col items-center">
-              <div className="relative">
-                {/* steam (hot) */}
-                {!isCold && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 1 }}
-                    className="pointer-events-none absolute -top-9 left-1/2 flex -translate-x-1/2 gap-2"
-                  >
-                    {[0, 1, 2].map((i) => (
-                      <span
-                        key={i}
-                        className="steam h-9 w-1.5 rounded-full bg-white/50 blur-[2px]"
-                        style={{ animationDelay: `${i * 0.45}s` }}
-                      />
-                    ))}
-                  </motion.div>
-                )}
-                {/* handle */}
-                <span className="absolute -right-4 top-3 h-9 w-6 rounded-r-xl border-[3px] border-l-0 border-white/25" />
-                {/* body */}
-                <div className="relative h-24 w-28 overflow-hidden rounded-b-[2rem] rounded-t-md border-2 border-white/25 bg-white/[0.04]">
-                  <motion.div
-                    initial={{ height: "0%" }}
-                    animate={{ height: "88%" }}
-                    transition={{ duration: 1.8, ease: "easeInOut" }}
-                    className={`absolute inset-x-0 bottom-0 bg-gradient-to-t ${
-                      drink?.fill || (isCold ? "from-amber-900 via-amber-700 to-amber-500" : "from-amber-950 via-amber-800 to-amber-600")
-                    }`}
-                  >
-                    <div className="h-[3px] w-full bg-amber-100/70" />
-                  </motion.div>
-                  {/* ice cubes for cold */}
-                  {isCold &&
-                    [0, 1].map((i) => (
-                      <motion.span
-                        key={i}
-                        initial={{ y: -30, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ delay: 0.6 + i * 0.25, type: "spring", stiffness: 300, damping: 14 }}
-                        className="absolute text-sm"
-                        style={{ left: `${28 + i * 34}%`, bottom: `${22 + i * 16}%` }}
-                      >
-                        🧊
-                      </motion.span>
-                    ))}
+          {step === "type" && (
+            <motion.div key="type" {...swap} className="flex flex-1 flex-col">
+              <p className="font-serif text-[clamp(1.75rem,3vw,2.6rem)] leading-[1.05]">
+                {temp.id === "cold" ? "Soğuk" : "Sıcak"} tarafı seçtin.{" "}
+                <span className="italic text-ember">Hangisi senin kahven?</span>
+              </p>
+              <ul className="mt-8 border-t hairline">
+                {DRINKS[temp.id].map((d, i) => (
+                  <li key={d.id}>
+                    <button
+                      onClick={() => brew(d)}
+                      className="group flex w-full items-center justify-between border-b hairline py-4 text-left"
+                    >
+                      <span className="flex items-baseline gap-4">
+                        <span className="font-mono text-[10px] text-bone-dim">0{i + 1}</span>
+                        <span className="font-serif text-[clamp(1.6rem,2.6vw,2.25rem)] leading-none transition-[color,transform] duration-500 ease-[cubic-bezier(.22,1,.36,1)] group-hover:translate-x-2 group-hover:text-ember">
+                          {d.label}
+                        </span>
+                      </span>
+                      <ArrowUpRight size={18} className="text-bone-dim transition-transform duration-500 group-hover:rotate-45 group-hover:text-ember" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => setStep("temp")}
+                className="mt-6 self-start font-mono text-[11px] uppercase tracking-[0.15em] text-bone-muted transition-colors hover:text-bone"
+              >
+                ← Geri
+              </button>
+            </motion.div>
+          )}
+
+          {(step === "brewing" || done) && (
+            <motion.div key="cup" {...swap} className="relative flex flex-1 flex-col items-center gap-10 sm:flex-row sm:items-center">
+              {done && (
+                <div className="pointer-events-none absolute left-[18%] top-1/3 z-20">
+                  {sparks.map((s, i) => (
+                    <motion.span
+                      key={i}
+                      initial={{ opacity: 0, x: 0, y: 0, rotate: 0 }}
+                      animate={{ opacity: [0, 1, 1, 0], x: s.x, y: s.y, rotate: s.r }}
+                      transition={{ duration: 1.5, delay: s.d, ease: "easeOut" }}
+                      className={`absolute ${i % 3 ? "bg-ember" : "bg-bone"}`}
+                      style={{ width: s.s, height: s.s }}
+                    />
+                  ))}
                 </div>
-              </div>
-              {/* saucer */}
-              <div className="mt-1.5 h-2 w-40 rounded-full bg-white/10" />
-            </div>
-
-            <AnimatePresence mode="wait">
-              {!done ? (
-                <motion.p
-                  key="brewing"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="font-mono text-sm text-slate-400"
-                >
-                  Bir <span className="text-spark">{drink?.label}</span> hazırlanıyor…
-                </motion.p>
-              ) : (
-                <motion.div
-                  key="done"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ type: "spring", stiffness: 240, damping: 20 }}
-                  className="max-w-md text-center"
-                >
-                  <div className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full border border-spark/30 bg-spark/10 px-4 py-1.5 font-display text-sm font-semibold text-spark">
-                    {drink?.emoji} {drink?.label} hazır!
-                  </div>
-                  <p className="text-sm leading-relaxed text-slate-300">{drink?.note}</p>
-                  <button
-                    onClick={restart}
-                    className="mt-3 font-mono text-xs text-slate-500 underline-offset-4 transition hover:text-slate-300 hover:underline"
-                  >
-                    ↺ başka bir kahve dene
-                  </button>
-                  <p className="mt-5 text-sm text-slate-400">
-                    Bunu ilk buluşmamızda ısmarlıyorum. İşte bana ulaşman için her şey 👇
-                  </p>
-                </motion.div>
               )}
-            </AnimatePresence>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
-      {/* Contact cards — blurred until done */}
-      <motion.div
-        animate={{ filter: done ? "blur(0px)" : "blur(9px)", opacity: done ? 1 : 0.5 }}
-        transition={{ duration: 0.6 }}
-        className={`mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 ${done ? "" : "pointer-events-none select-none"}`}
-        aria-hidden={!done}
-      >
-        {contacts.map((c) => {
-          const Icon = c.icon;
-          const ext = c.href.startsWith("http");
-          return (
-            <a
-              key={c.label}
-              href={done ? c.href : undefined}
-              tabIndex={done ? 0 : -1}
-              {...(ext ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-              className="group flex flex-col items-center rounded-2xl border border-white/10 bg-white/[0.02] p-5 transition hover:-translate-y-1 hover:border-violet-400/50 hover:bg-white/5"
-            >
-              <Icon className="mb-3 text-violet-300 transition group-hover:scale-110 group-hover:text-spark" size={22} />
-              <div className="text-sm font-semibold text-white">{c.label}</div>
-              <div className="mt-0.5 break-all text-xs text-slate-500">{c.value}</div>
-            </a>
-          );
-        })}
-      </motion.div>
+              <div className="pt-10 sm:w-2/5">
+                <Cup temp={temp} drink={drink} />
+              </div>
+
+              <div className="w-full sm:w-3/5">
+                <AnimatePresence mode="wait">
+                  {!done ? (
+                    <motion.div key="brewing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <Kicker>Hazırlanıyor</Kicker>
+                      <p className="mt-2 font-serif text-4xl">
+                        Bir <span className="italic text-ember">{drink?.label}</span>…
+                      </p>
+                      <div className="mt-6 h-px w-full bg-bone/10">
+                        <motion.div
+                          initial={{ scaleX: 0 }}
+                          animate={{ scaleX: 1 }}
+                          transition={{ duration: 2.2, ease: "linear" }}
+                          className="h-px origin-left bg-ember"
+                        />
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="done"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.6, ease: EASE }}
+                    >
+                      <Kicker className="text-ember">Servis edildi</Kicker>
+                      <p className="mt-2 font-serif text-[clamp(2.25rem,3.4vw,3rem)] leading-none">
+                        {drink?.label} <span className="italic">hazır.</span>
+                      </p>
+                      <p className="mt-4 leading-relaxed text-bone-muted">{drink?.note}</p>
+                      <p className="mt-4 text-sm text-bone">Bunu ilk buluşmamızda ben ısmarlıyorum. Bilgilerim aşağıda ↓</p>
+                      <button
+                        onClick={restart}
+                        className="mt-5 font-mono text-[11px] uppercase tracking-[0.15em] text-bone-muted transition-colors hover:text-bone"
+                      >
+                        <span className="link-draw pb-0.5">↺ Başka bir kahve dene</span>
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 };
 
-const Contact = () => (
-  <section id="contact" className="relative px-5 py-28">
-    <div className="mx-auto max-w-4xl">
-      <Reveal>
-        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-transparent p-8 text-center sm:p-14">
-          <div className="pointer-events-none absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-violet-600/20 blur-[100px]" />
-          <div className="relative">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 font-mono text-xs text-slate-300">
-              <Sparkles size={13} className="text-spark" /> Birlikte çalışalım
-            </div>
-            <h2 className="font-display text-4xl font-bold text-white sm:text-5xl">
-              Bir sonraki projenize <span className="text-gradient">yaratıcı bir çözüm</span> mü arıyorsunuz?
-            </h2>
-            <p className="mx-auto mt-5 max-w-xl leading-relaxed text-slate-400">
-              Buraya kadar geldiğinize göre size katabileceğim değere dair bir fikriniz oluşmuştur.
-              Sizinle çalışmadan önce ben de sizi biraz tanımak isterim — hadi en sevdiğiniz kahveden
-              başlayalım. ☕
-            </p>
+const Contact = () => {
+  const [revealed, setRevealed] = useState(false);
+  const serve = useCallback(() => setRevealed(true), []);
 
-            <ContactReveal />
+  return (
+    <section id="contact" className="relative px-5 py-28 sm:px-10 md:py-40">
+      <SectionHead index="04" label="İletişim" title="Bir kahve" italic="ısmarla." />
+
+      <div className="grid gap-12 md:grid-cols-12">
+        <Reveal className="md:col-span-4">
+          <p className="max-w-sm text-lg leading-relaxed text-bone-muted md:text-xl">
+            Buraya kadar geldiyseniz size katabileceğim değere dair bir fikriniz oluşmuştur. Çalışmadan
+            önce ben de sizi biraz tanımak isterim — en sevdiğiniz kahveden başlayalım.
+          </p>
+          <div className="mt-10 hidden md:block">
+            <Kicker>Konum</Kicker>
+            <div className="mt-1 text-bone">İstanbul, Türkiye</div>
           </div>
-        </div>
-      </Reveal>
-    </div>
-  </section>
-);
+        </Reveal>
+        <Reveal delay={0.1} className="md:col-span-8">
+          <CoffeeOrder onServed={serve} />
+        </Reveal>
+      </div>
+
+      <div className="relative mt-20 md:mt-28">
+        {!revealed && (
+          <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
+            <span className="rounded-full border hairline bg-ink-950/80 px-5 py-2.5 font-mono text-[11px] uppercase tracking-[0.18em] text-bone backdrop-blur">
+              Önce kahveni seç — bilgiler açılsın
+            </span>
+          </div>
+        )}
+        <motion.div
+          animate={{ filter: revealed ? "blur(0px)" : "blur(10px)", opacity: revealed ? 1 : 0.35 }}
+          transition={{ duration: 0.8 }}
+          className={`border-t hairline ${revealed ? "" : "pointer-events-none select-none"}`}
+          aria-hidden={!revealed}
+        >
+          {contacts.map((c) => {
+            const ext = c.href.startsWith("http");
+            return (
+              <a
+                key={c.label}
+                href={revealed ? c.href : undefined}
+                tabIndex={revealed ? 0 : -1}
+                {...(ext ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                className="group grid grid-cols-12 items-center gap-4 border-b hairline py-6 md:py-8"
+              >
+                <Kicker className="col-span-12 md:col-span-3">{c.label}</Kicker>
+                <span className="col-span-11 break-all font-serif text-[clamp(1.6rem,4.4vw,4rem)] leading-none transition-[color,transform] duration-500 ease-[cubic-bezier(.22,1,.36,1)] group-hover:translate-x-3 group-hover:text-ember md:col-span-8">
+                  {c.value}
+                </span>
+                <ArrowUpRight
+                  size={28}
+                  className="col-span-1 justify-self-end text-bone-dim transition-transform duration-500 group-hover:rotate-45 group-hover:text-ember"
+                />
+              </a>
+            );
+          })}
+        </motion.div>
+      </div>
+    </section>
+  );
+};
 
 /* ------------------------------------------------------------------ */
-/*  Footer                                                            */
+/*  Footer — giant wordmark                                           */
 /* ------------------------------------------------------------------ */
-const Footer = () => (
-  <footer className="border-t border-white/10 px-5 py-8">
-    <div className="mx-auto max-w-6xl text-center text-sm text-slate-500">
-      <span>© {new Date().getFullYear()} Özgür Kaan Kaya</span>
-    </div>
-  </footer>
-);
+const Footer = () => {
+  const lenis = useLenis();
+  const time = useClock();
+  const ref = useRef(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end end"] });
+  const y = useTransform(scrollYProgress, [0, 1], ["35%", "0%"]);
+
+  const toTop = () => (lenis ? lenis.scrollTo(0, { duration: 2 }) : window.scrollTo({ top: 0 }));
+  const socials = contacts.filter((c) => c.href.startsWith("http"));
+
+  return (
+    <footer ref={ref} className="relative overflow-hidden border-t hairline px-5 pt-16 sm:px-10">
+      <div className="grid gap-10 md:grid-cols-12">
+        <p className="font-serif text-[clamp(2rem,3.6vw,3.25rem)] leading-[1] md:col-span-5">
+          Bir sonraki projeyi <span className="italic text-ember">birlikte</span> yapalım.
+        </p>
+        <div className="md:col-span-2 md:col-start-7">
+          <Kicker>Menü</Kicker>
+          <ul className="mt-4 space-y-1.5">
+            {navLinks.map((l) => (
+              <li key={l.id}>
+                <a href={`#${l.id}`} className="group text-bone">
+                  <RollText>{l.label}</RollText>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="md:col-span-2">
+          <Kicker>Sosyal</Kicker>
+          <ul className="mt-4 space-y-1.5">
+            {socials.map((s) => (
+              <li key={s.label}>
+                <a href={s.href} target="_blank" rel="noopener noreferrer" className="group inline-flex items-center gap-1 text-bone">
+                  <RollText>{s.label}</RollText>
+                  <ArrowUpRight size={13} />
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="flex flex-col items-start justify-between gap-6 md:col-span-2 md:items-end">
+          <div className="md:text-right">
+            <Kicker>Yerel saat</Kicker>
+            <div className="mt-4 tabular-nums text-bone">İstanbul {time}</div>
+          </div>
+          <button onClick={toTop} data-cursor="Yukarı" className="group inline-flex items-center gap-2 text-sm text-bone">
+            <RollText>Başa dön</RollText>
+            <span className="grid h-9 w-9 place-items-center rounded-full border border-bone/30 transition-colors group-hover:border-ember group-hover:bg-ember group-hover:text-ink-950">
+              <ArrowUpRight size={15} className="-rotate-45" />
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <motion.div style={{ y }} aria-hidden className="mt-16 select-none whitespace-nowrap pb-[0.16em] font-serif text-[17.4vw] leading-[0.8] tracking-[-0.045em] md:mt-24">
+        Özgür Kaan <span className="italic text-ember">Kaya</span>
+      </motion.div>
+
+      <div className="flex flex-col justify-between gap-2 border-t hairline py-5 sm:flex-row">
+        <Kicker>© {YEAR} Özgür Kaan Kaya</Kicker>
+        <Kicker>Tasarım & kod — ÖKK</Kicker>
+      </div>
+    </footer>
+  );
+};
 
 /* ------------------------------------------------------------------ */
 /*  Root                                                              */
 /* ------------------------------------------------------------------ */
+const INTRO_KEY = "okk-intro-seen";
+
 const Portfolio = () => {
+  const [reduce] = useState(prefersReducedMotion);
+  const [loading, setLoading] = useState(() => {
+    if (reduce) return false;
+    try {
+      return !sessionStorage.getItem(INTRO_KEY);
+    } catch {
+      return true;
+    }
+  });
+  const lenis = useSmoothScroll(!reduce);
+
+  useEffect(() => {
+    if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
+    window.scrollTo(0, 0);
+  }, []);
+
+  useEffect(() => {
+    if (!lenis) return;
+    if (loading) lenis.stop();
+    else lenis.start();
+  }, [lenis, loading]);
+
+  const finishIntro = useCallback(() => {
+    try {
+      sessionStorage.setItem(INTRO_KEY, "1");
+    } catch {
+      /* storage unavailable — intro simply replays next time */
+    }
+    setLoading(false);
+  }, []);
+
   return (
-    <div className="grain relative min-h-screen font-sans">
-      <Aurora />
-      <CursorGlow />
-      <div className="relative z-10">
-        <Navbar />
-        <Hero />
-        <Marquee />
-        <About />
-        <Experience />
-        <Projects />
-        <Contact />
-        <Footer />
-      </div>
-    </div>
+    <LenisContext.Provider value={lenis}>
+      <MotionConfig reducedMotion="user">
+        <div className="grain relative min-h-screen bg-ink-950 font-sans text-bone">
+          <AnimatePresence>{loading && <Preloader key="loader" onDone={finishIntro} />}</AnimatePresence>
+          <Cursor />
+          <GridLines />
+          <Navbar />
+          <main className="relative z-10">
+            <Hero ready={!loading} />
+            <VelocityMarquee items={stack} />
+            <About />
+            <Experience />
+            <Projects />
+            <Contact />
+          </main>
+          <div className="relative z-10">
+            <Footer />
+          </div>
+        </div>
+      </MotionConfig>
+    </LenisContext.Provider>
   );
 };
 
